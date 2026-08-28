@@ -1,0 +1,247 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>spikeviz — 파형 스파이크 분석</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+KR:wght@400;500;600&display=swap">
+<style>
+:root{--bg:#f2f4f6;--panel:#fff;--line:#dfe3e8;--ink:#12171c;--ink2:#48525e;--ink3:#77828f;
+ --accent:#2a78d6;--accent-ink:#fff;--chip:#eaeef3;--bad:#c0392b;--ok:#1baf7a;
+ --shadow:0 1px 2px rgba(18,23,28,.05),0 6px 22px -14px rgba(18,23,28,.28)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#12161a;--panel:#191e24;--line:#2a323b;
+ --ink:#eef2f6;--ink2:#aab5c0;--ink3:#7d8894;--accent:#5b9df0;--accent-ink:#0b1016;--chip:#232b33;
+ --bad:#e57373;--ok:#4cc79a;--shadow:0 1px 2px rgba(0,0,0,.4)}}
+:root[data-theme="dark"]{--bg:#12161a;--panel:#191e24;--line:#2a323b;--ink:#eef2f6;--ink2:#aab5c0;
+ --ink3:#7d8894;--accent:#5b9df0;--accent-ink:#0b1016;--chip:#232b33;--bad:#e57373;--ok:#4cc79a;
+ --shadow:0 1px 2px rgba(0,0,0,.4)}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:"IBM Plex Sans KR",system-ui,sans-serif;
+ font-size:15px;line-height:1.6;-webkit-font-smoothing:antialiased}
+.wrap{max-width:980px;margin:0 auto;padding:48px 22px 90px;display:flex;flex-direction:column;gap:28px}
+h1{font-size:27px;font-weight:600;letter-spacing:-.015em;margin:0}
+h2{font-size:16px;font-weight:600;margin:0}
+p{margin:0}
+.eyebrow{font-family:"IBM Plex Mono",monospace;font-size:11.5px;letter-spacing:.14em;
+ text-transform:uppercase;color:var(--ink3)}
+header{display:flex;flex-direction:column;gap:8px;border-bottom:1px solid var(--line);padding-bottom:22px}
+header .sub{color:var(--ink2);max-width:62ch;font-size:14.5px}
+section.panel{background:var(--panel);border:1px solid var(--line);border-radius:12px;
+ box-shadow:var(--shadow);padding:20px 22px;display:flex;flex-direction:column;gap:14px}
+.addrow{display:flex;gap:10px;flex-wrap:wrap}
+input[type=text]{flex:1 1 380px;min-width:0;background:var(--bg);color:var(--ink);border:1px solid var(--line);
+ border-radius:8px;padding:11px 13px;font-family:"IBM Plex Mono",monospace;font-size:13.5px}
+input[type=text]:focus-visible,button:focus-visible,summary:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+button{border:0;border-radius:8px;padding:11px 18px;font:inherit;font-weight:500;font-size:14px;
+ background:var(--accent);color:var(--accent-ink);cursor:pointer}
+button.ghost{background:var(--chip);color:var(--ink2)}
+button:disabled{opacity:.55;cursor:progress}
+.hint{font-size:13px;color:var(--ink3)}
+ul.files{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:1px;
+ background:var(--line);border:1px solid var(--line);border-radius:9px;overflow:hidden}
+ul.files li{background:var(--panel);display:flex;align-items:center;gap:14px;padding:11px 14px}
+ul.files .nm{font-family:"IBM Plex Mono",monospace;font-size:13.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+ul.files .meta{margin-left:auto;font-size:12.5px;color:var(--ink3);font-variant-numeric:tabular-nums;white-space:nowrap}
+ul.files .path{font-size:11.5px;color:var(--ink3);font-family:"IBM Plex Mono",monospace}
+ul.files .col{display:flex;flex-direction:column;min-width:0}
+.x{background:none;color:var(--ink3);padding:4px 8px;font-size:16px;line-height:1;border-radius:6px}
+.x:hover{color:var(--bad);background:var(--chip)}
+.empty{color:var(--ink3);font-size:14px;padding:6px 2px}
+details summary{cursor:pointer;font-size:14px;color:var(--ink2);font-weight:500;list-style:none;
+ display:flex;align-items:center;gap:7px}
+details summary::-webkit-details-marker{display:none}
+details summary::before{content:"▸";color:var(--ink3);font-size:11px}
+details[open] summary::before{content:"▾"}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px;margin-top:14px}
+label.f{display:flex;flex-direction:column;gap:5px;font-size:12.5px;color:var(--ink3)}
+label.f input{background:var(--bg);color:var(--ink);border:1px solid var(--line);border-radius:7px;
+ padding:8px 10px;font-family:"IBM Plex Mono",monospace;font-size:13px;font-variant-numeric:tabular-nums}
+label.f span b{color:var(--ink2);font-weight:500}
+.runbar{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+.msg{font-size:13.5px;color:var(--ink2)}
+.msg.err{color:var(--bad)}
+.links{display:flex;flex-wrap:wrap;gap:8px}
+.links a{font-family:"IBM Plex Mono",monospace;font-size:12.5px;text-decoration:none;color:var(--ink2);
+ background:var(--chip);border-radius:7px;padding:7px 11px}
+.links a:hover{color:var(--ink)}
+.shots{display:flex;flex-direction:column;gap:12px}
+.shots a{display:block;border:1px solid var(--line);border-radius:9px;overflow:hidden;background:#fcfcfb}
+.shots img{display:block;width:100%}
+table{border-collapse:collapse;width:100%;font-size:13.5px;font-variant-numeric:tabular-nums}
+th,td{text-align:right;padding:9px 12px;border-bottom:1px solid var(--line);white-space:nowrap}
+th:first-child,td:first-child{text-align:left;font-family:"IBM Plex Mono",monospace}
+th{font-size:11px;letter-spacing:.07em;text-transform:uppercase;color:var(--ink3);font-weight:500}
+tbody tr:last-child td{border-bottom:none}
+.dot{display:inline-block;width:8px;height:8px;border-radius:2px;margin-right:8px;vertical-align:1px}
+.notes{margin:0;padding-left:18px;color:var(--ink2);font-size:14px;display:flex;flex-direction:column;gap:6px}
+.tablewrap{overflow-x:auto}
+.spin{width:15px;height:15px;border:2px solid var(--line);border-top-color:var(--accent);
+ border-radius:50%;animation:sp .8s linear infinite;display:inline-block;vertical-align:-2px}
+@keyframes sp{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){.spin{animation:none}}
+code{font-family:"IBM Plex Mono",monospace;background:var(--chip);padding:1px 5px;border-radius:4px;font-size:.92em}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+  <p class="eyebrow">spikeviz</p>
+  <h1>음원 파형 스파이크 간격 분석</h1>
+  <p class="sub">음원 경로를 추가하고 <b>분석 실행</b>을 누르면, 파일별 파형 그래프와 첫 스파이크 기준 겹침 그래프,
+     간격 통계를 담은 리포트(HTML·PDF)와 CSV·JSON을 <code>output/run_날짜_시각/</code> 에 만듭니다.</p>
+</header>
+
+<section class="panel">
+  <h2>1 · 음원 추가</h2>
+  <div class="addrow">
+    <input type="text" id="path" placeholder="/home/jay/Downloads/audio  또는  /home/jay/Downloads/audio/260828_130805.m4a"
+           autocomplete="off" spellcheck="false">
+    <button id="add">추가</button>
+  </div>
+  <p class="hint">파일 경로를 넣으면 그 파일 하나, 폴더 경로를 넣으면 그 안의 음원 전부를 추가합니다. <code>~</code> 도 씁니다.</p>
+  <p class="msg" id="addmsg"></p>
+  <ul class="files" id="list"></ul>
+  <p class="empty" id="empty">아직 추가된 파일이 없습니다.</p>
+</section>
+
+<section class="panel">
+  <h2>2 · 분석 실행</h2>
+  <details id="adv">
+    <summary>고급 설정</summary>
+    <div class="grid">
+      <label class="f"><span>앞부분 건너뛰기 <b>skip_s</b> (초)</span><input type="number" id="skip_s" step="1" min="0"></label>
+      <label class="f"><span>읽을 최대 길이 <b>max_s</b> (초)</span><input type="number" id="max_s" step="10" min="10"></label>
+      <label class="f"><span>전체 사용 기준 <b>min_keep_s</b> (초)</span><input type="number" id="min_keep_s" step="5" min="0"></label>
+      <label class="f"><span>최소 배율 <b>k_abs</b> (× 잡음바닥)</span><input type="number" id="k_abs" step="1" min="1"></label>
+      <label class="f"><span>상대 계수 <b>k_rel</b> (× p90)</span><input type="number" id="k_rel" step="0.05" min="0"></label>
+      <label class="f"><span>병합 간격 <b>refractory_s</b> (초)</span><input type="number" id="refractory_s" step="0.1" min="0"></label>
+      <label class="f"><span>엔벌로프 프레임 <b>hop_ms</b> (ms)</span><input type="number" id="hop_ms" step="1" min="1"></label>
+      <label class="f"><span>분석 샘플레이트 <b>sr</b> (Hz)</span><input type="number" id="sr" step="1000" min="4000"></label>
+    </div>
+    <p class="hint" style="margin-top:10px">스파이크 판정 = 잡음 바닥 대비 <code>max(k_abs, k_rel × p90)</code> 초과.
+      값을 비우면 기본값으로 돌아갑니다. <button class="ghost" id="reset" type="button" style="padding:5px 10px;font-size:12.5px">기본값으로</button></p>
+  </details>
+  <div class="runbar">
+    <button id="run">분석 실행</button>
+    <span class="msg" id="runmsg"></span>
+  </div>
+</section>
+
+<section class="panel" id="result" hidden>
+  <h2>3 · 결과 <span id="runid" class="eyebrow"></span></h2>
+  <div class="links" id="links"></div>
+  <ul class="notes" id="notes"></ul>
+  <div class="tablewrap"><table id="sum"><thead><tr>
+    <th>파일</th><th>스파이크</th><th>임계</th><th>최대</th><th>간격 중앙값(초)</th><th>평균(초)</th>
+    <th>최소 / 최대(초)</th><th>변동계수</th><th>첫 스파이크</th></tr></thead><tbody></tbody></table></div>
+  <div class="shots" id="shots"></div>
+</section>
+
+<section class="panel" id="pastwrap" hidden>
+  <h2>지난 실행</h2>
+  <div class="links" id="past"></div>
+</section>
+</div>
+
+<script>
+const $ = s => document.querySelector(s);
+const FIELDS = ["skip_s","max_s","min_keep_s","k_abs","k_rel","refractory_s","hop_ms","sr"];
+let defaults = {};
+const mmss = t => `${Math.floor(t/60)}:${String(Math.floor(t%60)).padStart(2,"0")}`;
+const fmt = (v,d=1) => v==null ? "–" : Number(v).toFixed(d);
+
+function renderFiles(files){
+  const ul = $("#list");
+  ul.innerHTML = files.map(f => `<li>
+      <div class="col"><span class="nm">${f.filename}</span><span class="path">${f.path}</span></div>
+      <span class="meta">${mmss(f.duration)} · ${(f.size/1048576).toFixed(1)} MB</span>
+      <button class="x" data-path="${encodeURIComponent(f.path)}" title="목록에서 제거">×</button>
+    </li>`).join("");
+  $("#empty").hidden = files.length > 0;
+  ul.hidden = files.length === 0;
+  ul.querySelectorAll(".x").forEach(b => b.onclick = async () => {
+    const r = await fetch("/api/files/remove", {method:"POST", headers:{"Content-Type":"application/json"},
+      body: JSON.stringify({path: decodeURIComponent(b.dataset.path)})});
+    renderFiles((await r.json()).files);
+  });
+}
+
+function renderPast(runs){
+  $("#pastwrap").hidden = runs.length === 0;
+  $("#past").innerHTML = runs.slice(0,12)
+    .map(r => `<a href="/runs/${r}/report.html" target="_blank" rel="noopener">${r}</a>`).join("");
+}
+
+async function load(){
+  const s = await (await fetch("/api/state")).json();
+  defaults = s.defaults;
+  FIELDS.forEach(k => $("#"+k).value = s.params[k] ?? defaults[k]);
+  renderFiles(s.files);
+  renderPast(s.runs || []);
+}
+
+$("#add").onclick = async () => {
+  const path = $("#path").value.trim();
+  const msg = $("#addmsg");
+  if(!path){ msg.className="msg err"; msg.textContent="경로를 입력하세요."; return; }
+  $("#add").disabled = true; msg.className="msg"; msg.textContent="확인 중…";
+  const r = await fetch("/api/files", {method:"POST", headers:{"Content-Type":"application/json"},
+    body: JSON.stringify({path})});
+  const d = await r.json();
+  $("#add").disabled = false;
+  if(!r.ok){ msg.className="msg err"; msg.textContent = d.error; return; }
+  renderFiles(d.files);
+  $("#path").value = "";
+  msg.className = "msg";
+  msg.textContent = `${d.added.length}개 추가${d.skipped.length ? ` · 건너뜀 ${d.skipped.length}개 (${d.skipped.join(", ")})` : ""}`;
+};
+$("#path").addEventListener("keydown", e => { if(e.key === "Enter") $("#add").click(); });
+$("#reset").onclick = () => FIELDS.forEach(k => $("#"+k).value = defaults[k]);
+
+$("#run").onclick = async () => {
+  const params = {};
+  FIELDS.forEach(k => { const v = $("#"+k).value; params[k] = v === "" ? defaults[k] : Number(v); });
+  $("#run").disabled = true;
+  $("#runmsg").className = "msg";
+  $("#runmsg").innerHTML = '<span class="spin"></span> 분석 중… 파일이 길면 수십 초 걸립니다.';
+  try{
+    const r = await fetch("/api/run", {method:"POST", headers:{"Content-Type":"application/json"},
+      body: JSON.stringify({params})});
+    const d = await r.json();
+    if(!r.ok){ $("#runmsg").className="msg err"; $("#runmsg").textContent = d.error; return; }
+    show(d);
+    const fail = d.failed?.length ? ` · 실패 ${d.failed.length}개 (${d.failed.map(f=>f.file).join(", ")})` : "";
+    $("#runmsg").textContent = `완료 — ${d.files.length}개 분석${fail}`;
+    renderPast((await (await fetch("/api/state")).json()).runs || []);
+  }catch(e){
+    $("#runmsg").className="msg err"; $("#runmsg").textContent = "실행 실패: " + e;
+  }finally{ $("#run").disabled = false; }
+};
+
+function show(d){
+  $("#result").hidden = false;
+  $("#runid").textContent = d.run_id;
+  const base = `/runs/${d.run_id}/`;
+  const files = [["리포트 (HTML)","report.html"], ...(d.pdf ? [["리포트 (PDF)","report.pdf"]] : []),
+    ["간격 CSV","spike_intervals.csv"], ["원자료 JSON","spike_report.json"],
+    ["그래프 1 PNG","graph1_waveforms.png"], ["그래프 2 PNG","graph2_overlay.png"]];
+  $("#links").innerHTML = files.map(([t,f]) => `<a href="${base}${f}" target="_blank" rel="noopener">${t}</a>`).join("")
+    + (d.pdf ? "" : '<span class="hint">PDF는 Chrome이 없어 건너뛰었습니다.</span>');
+  $("#notes").innerHTML = d.notes.map(n => `<li>${n}</li>`).join("");
+  $("#sum tbody").innerHTML = d.files.map(f => {
+    const s = f.stats;
+    return `<tr><td><span class="dot" style="background:${f.color}"></span>${f.name}</td>
+      <td>${f.spikes}</td><td>${Math.round(f.thr)}×</td><td>${Math.round(f.max_ratio)}×</td>
+      <td>${s?fmt(s.median):"–"}</td><td>${s?fmt(s.mean):"–"}</td>
+      <td>${s?`${fmt(s.min)} / ${fmt(s.max)}`:"–"}</td><td>${s?fmt(s.cv,2):"–"}</td>
+      <td>${mmss(f.anchor)}</td></tr>`;
+  }).join("");
+  $("#shots").innerHTML = ["graph1_waveforms.png","graph2_overlay.png"]
+    .map(f => `<a href="${base}${f}" target="_blank" rel="noopener"><img src="${base}${f}?t=${Date.now()}" alt="${f}"></a>`).join("");
+}
+
+load();
+</script>
+</body>
+</html>
