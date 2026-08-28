@@ -87,11 +87,12 @@ def main() -> None:
     latest.symlink_to(out.name)
 
     w = max(len(r["name"]) for r in results)
-    print(f"\n  {'파일'.ljust(w)}  스파이크  임계    간격중앙값  평균     최소/최대")
+    print(f"\n  {'파일'.ljust(w)}  스파이크  임계   우세간격      간격중앙값  평균     최소/최대")
     for r in results:
-        s = r["stats"]
+        s, d = r["stats"], r["dominant"]
+        dom = f"{d['period']:6.1f}s({d['n']:>2}/{s['n']:<2})" if d and s else "         –  "
         st = (f"{s['median']:9.1f}s {s['mean']:7.1f}s  {s['min']:.1f}/{s['max']:.1f}s") if s else "        –"
-        print(f"  {r['name'].ljust(w)}  {len(r['times']):>7}  {r['thr']:>4.0f}×  {st}")
+        print(f"  {r['name'].ljust(w)}  {len(r['times']):>7}  {r['thr']:>4.0f}×  {dom}  {st}")
     print()
     for n in report.observations(results):
         print("  - " + n.replace("<b>", "").replace("</b>", ""))

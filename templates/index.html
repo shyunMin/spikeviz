@@ -43,6 +43,8 @@ ul.files{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;g
 ul.files li{background:var(--panel);display:flex;align-items:center;gap:14px;padding:11px 14px}
 ul.files .nm{font-family:"IBM Plex Mono",monospace;font-size:13.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 ul.files .meta{margin-left:auto;font-size:12.5px;color:var(--ink3);font-variant-numeric:tabular-nums;white-space:nowrap}
+ul.files .gone{color:var(--bad);font-family:"IBM Plex Sans KR",sans-serif;font-size:12px;
+ background:var(--chip);border-radius:5px;padding:1px 7px;margin-left:6px}
 ul.files .path{font-size:11.5px;color:var(--ink3);font-family:"IBM Plex Mono",monospace}
 ul.files .col{display:flex;flex-direction:column;min-width:0}
 .x{background:none;color:var(--ink3);padding:4px 8px;font-size:16px;line-height:1;border-radius:6px}
@@ -73,6 +75,7 @@ th,td{text-align:right;padding:9px 12px;border-bottom:1px solid var(--line);whit
 th:first-child,td:first-child{text-align:left;font-family:"IBM Plex Mono",monospace}
 th{font-size:11px;letter-spacing:.07em;text-transform:uppercase;color:var(--ink3);font-weight:500}
 tbody tr:last-child td{border-bottom:none}
+table i{font-style:normal;color:var(--ink3);font-size:11.5px}
 .dot{display:inline-block;width:8px;height:8px;border-radius:2px;margin-right:8px;vertical-align:1px}
 .notes{margin:0;padding-left:18px;color:var(--ink2);font-size:14px;display:flex;flex-direction:column;gap:6px}
 .tablewrap{overflow-x:auto}
@@ -133,7 +136,7 @@ code{font-family:"IBM Plex Mono",monospace;background:var(--chip);padding:1px 5p
   <div class="links" id="links"></div>
   <ul class="notes" id="notes"></ul>
   <div class="tablewrap"><table id="sum"><thead><tr>
-    <th>파일</th><th>스파이크</th><th>임계</th><th>최대</th><th>간격 중앙값(초)</th><th>평균(초)</th>
+    <th>파일</th><th>스파이크</th><th>임계</th><th>최대</th><th>우세 간격(초)</th><th>간격 중앙값(초)</th><th>평균(초)</th>
     <th>최소 / 최대(초)</th><th>변동계수</th><th>첫 스파이크</th></tr></thead><tbody></tbody></table></div>
   <div class="shots" id="shots"></div>
 </section>
@@ -154,7 +157,8 @@ const fmt = (v,d=1) => v==null ? "–" : Number(v).toFixed(d);
 function renderFiles(files){
   const ul = $("#list");
   ul.innerHTML = files.map(f => `<li>
-      <div class="col"><span class="nm">${f.filename}</span><span class="path">${f.path}</span></div>
+      <div class="col"><span class="nm">${f.filename}${f.missing?' <span class="gone">파일 없음</span>':''}</span>
+        <span class="path">${f.path}</span></div>
       <span class="meta">${mmss(f.duration)} · ${(f.size/1048576).toFixed(1)} MB</span>
       <button class="x" data-path="${encodeURIComponent(f.path)}" title="목록에서 제거">×</button>
     </li>`).join("");
@@ -211,7 +215,7 @@ $("#run").onclick = async () => {
     const d = await r.json();
     if(!r.ok){ $("#runmsg").className="msg err"; $("#runmsg").textContent = d.error; return; }
     show(d);
-    const fail = d.failed?.length ? ` · 실패 ${d.failed.length}개 (${d.failed.map(f=>f.file).join(", ")})` : "";
+    const fail = d.failed?.length ? ` · 실패 ${d.failed.length}개 — ${d.failed.map(f=>`${f.file}: ${f.error}`).join(" / ")}` : "";
     $("#runmsg").textContent = `완료 — ${d.files.length}개 분석${fail}`;
     renderPast((await (await fetch("/api/state")).json()).runs || []);
   }catch(e){
@@ -230,9 +234,10 @@ function show(d){
     + (d.pdf ? "" : '<span class="hint">PDF는 Chrome이 없어 건너뛰었습니다.</span>');
   $("#notes").innerHTML = d.notes.map(n => `<li>${n}</li>`).join("");
   $("#sum tbody").innerHTML = d.files.map(f => {
-    const s = f.stats;
+    const s = f.stats, d = f.dominant;
     return `<tr><td><span class="dot" style="background:${f.color}"></span>${f.name}</td>
       <td>${f.spikes}</td><td>${Math.round(f.thr)}×</td><td>${Math.round(f.max_ratio)}×</td>
+      <td>${d?`${fmt(d.period)} <i>(${d.n}/${s.n})</i>`:"–"}</td>
       <td>${s?fmt(s.median):"–"}</td><td>${s?fmt(s.mean):"–"}</td>
       <td>${s?`${fmt(s.min)} / ${fmt(s.max)}`:"–"}</td><td>${s?fmt(s.cv,2):"–"}</td>
       <td>${mmss(f.anchor)}</td></tr>`;

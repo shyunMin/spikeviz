@@ -51,9 +51,16 @@ def index():
     return render_template("index.html")
 
 
+def mark_missing(files: list[dict]) -> list[dict]:
+    for f in files:
+        f["missing"] = not Path(f["path"]).exists()
+    return files
+
+
 @app.get("/api/state")
 def api_state():
     s = load_state()
+    mark_missing(s["files"])
     s["runs"] = [d.name for d in sorted(OUTPUT.glob("run_*"), reverse=True)] if OUTPUT.exists() else []
     s["defaults"] = Params().to_dict()
     return jsonify(s)
@@ -84,7 +91,7 @@ def api_add():
         known.add(key)
         added.append(p.name)
     save_state(s)
-    return jsonify(files=s["files"], added=added, skipped=skipped)
+    return jsonify(files=mark_missing(s["files"]), added=added, skipped=skipped)
 
 
 @app.post("/api/files/remove")
@@ -93,7 +100,7 @@ def api_remove():
     target = request.json.get("path")
     s["files"] = [f for f in s["files"] if f["path"] != target]
     save_state(s)
-    return jsonify(files=s["files"])
+    return jsonify(files=mark_missing(s["files"]))
 
 
 @app.post("/api/run")
@@ -109,13 +116,18 @@ def api_run():
 
     results, failed = [], []
     for f in s["files"]:
+        if not Path(f["path"]).exists():
+            failed.append({"file": f["filename"],
+                           "error": "파일을 찾을 수 없습니다 (옮겼거나 지운 것 같습니다). 목록에서 지우고 다시 추가하세요."})
+            continue
         try:
             results.append(analyze(f["path"], params))
         except Exception as e:
             failed.append({"file": f["filename"], "error": str(e)})
             traceback.print_exc()
     if not results:
-        return jsonify(error="모든 파일 분석에 실패했습니다.", failed=failed), 500
+        reasons = " / ".join(f"{x['file']}: {x['error']}" for x in failed[:3])
+        return jsonify(error=f"분석에 성공한 파일이 없습니다. {reasons}", failed=failed), 500
 
     run_id = "run_" + datetime.now().strftime("%Y%m%d_%H%M%S")
     d = OUTPUT / run_id
@@ -135,7 +147,8 @@ def api_run():
     summary = [{"name": r["name"], "filename": r["filename"], "color": report.color_of(i),
                 "window": [r["t0"], r["t1"]], "thr": r["thr"], "max_ratio": r["max_ratio"],
                 "spikes": len(r["times"]), "anchor": r["abs_anchor"],
-                "stats": r["stats"], "intervals": [round(v, 2) for v in r["intervals"]]}
+                "stats": r["stats"], "dominant": r["dominant"],
+                "intervals": [round(v, 2) for v in r["intervals"]]}
                for i, r in enumerate(results)]
     return jsonify(run_id=run_id, dir=str(d), files=summary, failed=failed,
                    pdf=bool(pdf), notes=report.observations(results))

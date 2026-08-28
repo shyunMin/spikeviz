@@ -73,6 +73,29 @@ def _peaks(ratio: np.ndarray, dt: float, thr: float, refractory: float) -> list[
     return out
 
 
+def dominant_interval(intervals, tol: float = 0.25) -> dict | None:
+    """간격 중 가장 큰 무리를 찾아 그 대표값을 돌려준다.
+
+    짧은 부가 스파이크가 섞이면 전체 중앙값이 실제 주기보다 낮게 나온다.
+    구간을 미리 정해두지 않고, 각 간격을 중심으로 ±tol 배 안에 들어오는
+    간격이 가장 많은 무리를 고른다. 뚜렷한 무리가 없으면 None.
+    """
+    iv = np.array([v for v in intervals if v > 0], dtype=float)
+    if len(iv) < 3:
+        return None
+    logs, width, best = np.log(iv), np.log(1 + tol), None
+    for c in logs:
+        grp = iv[np.abs(logs - c) <= width]
+        score = (len(grp), -float(grp.std() / grp.mean()))
+        if best is None or score > best[0]:
+            best = (score, grp)
+    grp = best[1]
+    if len(grp) < 3 or len(grp) < 0.3 * len(iv):
+        return None
+    return dict(period=float(np.median(grp)), n=int(len(grp)), share=float(len(grp) / len(iv)),
+                lo=float(grp.min()), hi=float(grp.max()), std=float(grp.std()))
+
+
 def analyze(path: str, p: Params) -> dict:
     """한 파일의 분석 결과. 파형과 엔벌로프 배열까지 함께 돌려준다."""
     duration = probe_duration(path)
@@ -116,7 +139,7 @@ def analyze(path: str, p: Params) -> dict:
         whole_file=(t0 == 0.0),
         times=times, abs_times=[t0 + t for t in times], ratios=ratios,
         intervals=[float(v) for v in iv],
-        stats=stats(iv), stats_long=stats(long_iv),
+        stats=stats(iv), stats_long=stats(long_iv), dominant=dominant_interval(iv),
         anchor=anchor, abs_anchor=t0 + anchor, anchor_kind=anchor_kind,
         wave=x, env=env,
     )

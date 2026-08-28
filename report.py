@@ -149,16 +149,51 @@ def write_json(results: list[dict], params: dict, out: Path) -> Path:
     return out
 
 
+def _period_groups(results: list[dict], tol: float = .15) -> list[list[dict]]:
+    """우세 간격이 서로 ±tol 안에 드는 파일끼리 묶는다(가까운 것부터 연결)."""
+    have = sorted((r for r in results if r["dominant"]), key=lambda r: r["dominant"]["period"])
+    groups: list[list[dict]] = []
+    for r in have:
+        if groups and r["dominant"]["period"] <= groups[-1][-1]["dominant"]["period"] * (1 + tol):
+            groups[-1].append(r)
+        else:
+            groups.append([r])
+    return groups
+
+
 def observations(results: list[dict]) -> list[str]:
     """데이터에서 바로 계산되는 관찰만 만든다."""
     notes = []
-    scored = [r for r in results if r["stats"] and r["stats"]["n"] >= 4]
+    scored = [r for r in results if r["dominant"]]
     if scored:
-        best = min(scored, key=lambda r: r["stats"]["cv"])
-        s = best["stats"]
-        notes.append(f"<b>{html.escape(best['name'])}가 가장 규칙적입니다.</b> 간격 {s['n']}개의 중앙값 "
-                     f"{s['median']:.1f}초, 표준편차 {s['std']:.1f}초(변동계수 {s['cv']:.2f})로 "
-                     f"이번 실행에서 가장 고른 간격을 보입니다.")
+        best = max(scored, key=lambda r: (r["dominant"]["share"], -r["dominant"]["std"]))
+        d = best["dominant"]
+        notes.append(f"<b>{html.escape(best['name'])}가 가장 규칙적입니다.</b> 간격 {d['n']}개"
+                     f"({d['share'] * 100:.0f}%)가 {d['lo']:.1f}–{d['hi']:.1f}초에 몰려 있고 "
+                     f"대표값은 {d['period']:.1f}초입니다.")
+
+    groups = _period_groups(results)
+    big = max(groups, key=len) if groups else []
+    if len(big) >= 2:
+        lo = min(r["dominant"]["period"] for r in big)
+        hi = max(r["dominant"]["period"] for r in big)
+        notes.append(f"<b>{len(big)}개 파일이 같은 주기 계열입니다.</b> " +
+                     ", ".join(f"{html.escape(r['name'])} {r['dominant']['period']:.1f}초" for r in big) +
+                     f" — 대표값이 {lo:.1f}–{hi:.1f}초 안에 모입니다.")
+    mixed = [r for r in results if r["dominant"] and r["dominant"]["share"] < .5]
+    if mixed:
+        notes.append("<b>부가 스파이크가 섞인 파일이 있습니다.</b> " +
+                     ", ".join(f"{html.escape(r['name'])}(우세 간격이 전체의 "
+                               f"{r['dominant']['share'] * 100:.0f}%, 전체 중앙값 "
+                               f"{r['stats']['median']:.1f}초 vs 우세 {r['dominant']['period']:.1f}초)"
+                               for r in mixed) +
+                     " — 주기적인 스파이크 사이에 짧은 간격의 스파이크가 끼어 전체 중앙값이 낮게 나옵니다. "
+                     "주기를 볼 때는 우세 간격 쪽을 보세요.")
+    nodom = [r for r in results if not r["dominant"] and r["times"]]
+    if nodom:
+        notes.append("<b>뚜렷한 주기가 없는 파일:</b> " +
+                     ", ".join(html.escape(r["name"]) for r in nodom) +
+                     ". 간격이 한 값 주위로 모이지 않아 대표 주기를 뽑지 않았습니다.")
     weak = [r for r in results if r["times"] and r["max_ratio"] < 20]
     if weak:
         notes.append("<b>검출 임계에 겨우 걸친 파일이 있습니다.</b> " +
@@ -185,7 +220,11 @@ def _card(r: dict, c: str) -> str:
     s = r["stats"]
     chips = "".join(f'<span class="iv">{v:.1f}</span>' for v in r["intervals"]) \
         or '<span class="none">간격 없음</span>'
-    stat = (f'<span><b>{s["median"]:.1f}</b>초 중앙값</span><span><b>{s["mean"]:.1f}</b>초 평균</span>'
+    d = r["dominant"]
+    dom = (f'<span class="dom"><b>{d["period"]:.1f}</b>초 우세 간격 '
+           f'<i>{d["n"]}/{s["n"]}개 · {d["lo"]:.1f}–{d["hi"]:.1f}초</i></span>') if d else \
+          '<span class="dom none">우세 간격 없음</span>'
+    stat = (f'{dom}<span><b>{s["median"]:.1f}</b>초 중앙값</span><span><b>{s["mean"]:.1f}</b>초 평균</span>'
             f'<span>{s["min"]:.1f}–{s["max"]:.1f}초 범위</span><span>σ {s["std"]:.1f}초</span>'
             f'<span>변동계수 {s["cv"]:.2f}</span>') if s else '<span>간격 통계 없음</span>'
     times = " ".join(f'<span class="t">{mmss(t)}<i>{x:.0f}×</i></span>'
@@ -208,9 +247,11 @@ def write_html(results: list[dict], params: dict, run_id: str, g1: Path, g2: Pat
     rows = ""
     for i, r in enumerate(results):
         s = r["stats"]
-        cells = (f"<td>{s['median']:.1f}</td><td>{s['mean']:.1f}</td>"
+        d = r["dominant"]
+        dom = f"<b>{d['period']:.1f}</b> <i>({d['n']}/{s['n']})</i>" if d and s else "–"
+        cells = (f"<td>{dom}</td><td>{s['median']:.1f}</td><td>{s['mean']:.1f}</td>"
                  f"<td>{s['min']:.1f} / {s['max']:.1f}</td><td>{s['cv']:.2f}</td>") if s \
-            else "<td>–</td><td>–</td><td>–</td><td>–</td>"
+            else "<td>–</td><td>–</td><td>–</td><td>–</td><td>–</td>"
         rows += (f'<tr><td><span class="dot" style="background:{color_of(i)}"></span>'
                  f'{html.escape(r["name"])}</td><td>{len(r["times"])}</td><td>{r["thr"]:.0f}×</td>'
                  f'{cells}<td>{mmss(r["abs_anchor"])}</td></tr>')
@@ -254,6 +295,10 @@ figure img{{display:block;width:100%;min-width:760px;background:var(--figbg);bor
 .meta{{font-size:13.5px;color:var(--ink3)}}
 .stats{{display:flex;flex-wrap:wrap;gap:8px 22px;font-size:14px;color:var(--ink2);font-variant-numeric:tabular-nums}}
 .stats b{{color:var(--ink);font-family:"IBM Plex Mono",monospace;font-weight:500;font-size:16px}}
+.stats .dom{{background:var(--chip);border-radius:7px;padding:2px 10px;color:var(--ink)}}
+.stats .dom i{{font-style:normal;color:var(--ink3);font-size:12.5px}}
+.stats .dom.none{{color:var(--ink3)}}
+table i{{font-style:normal;color:var(--ink3);font-size:12px}}
 .lbl{{font-size:12px;letter-spacing:.06em;color:var(--ink3);text-transform:uppercase;font-family:"IBM Plex Mono",monospace}}
 .chips{{display:flex;flex-wrap:wrap;gap:5px}}
 .iv{{font-family:"IBM Plex Mono",monospace;font-size:12.5px;padding:3px 8px;border-radius:5px;background:var(--chip);color:var(--ink2);font-variant-numeric:tabular-nums}}
@@ -294,6 +339,8 @@ code{{font-family:"IBM Plex Mono",monospace;font-size:.92em;background:var(--chi
   <div><b>파형 측정</b><span>{p['hop_ms']} ms 프레임의 피크 엔벌로프({p['sr']} Hz 모노). 짧은 클릭이 평균에 묻히지 않습니다.</span></div>
   <div><b>스파이크 판정</b><span>{thr_rule}</span></div>
   <div><b>그래프 2 정렬</b><span>각 파일의 첫 스파이크를 t = 0으로 두고 상대 시간으로 겹쳐 그림.</span></div>
+  <div><b>우세 간격</b><span>간격 중 ±25% 안에 가장 많이 모이는 무리의 대표값. 짧은 부가 스파이크가 섞여도
+    실제 주기가 드러납니다. 무리가 없으면 "없음".</span></div>
 </section>
 <figure>
   <div class="cap"><h2>그래프 1 — 파일별 파형</h2>
@@ -308,7 +355,7 @@ code{{font-family:"IBM Plex Mono",monospace;font-size:.92em;background:var(--chi
 </figure>
 <section class="find"><h2>자동 관찰</h2><ul>{notes}</ul></section>
 <section class="tablewrap"><table>
-  <thead><tr><th>파일</th><th>스파이크</th><th>임계</th><th>간격 중앙값(초)</th><th>평균(초)</th><th>최소 / 최대(초)</th><th>변동계수</th><th>첫 스파이크</th></tr></thead>
+  <thead><tr><th>파일</th><th>스파이크</th><th>임계</th><th>우세 간격(초)</th><th>간격 중앙값(초)</th><th>평균(초)</th><th>최소 / 최대(초)</th><th>변동계수</th><th>첫 스파이크</th></tr></thead>
   <tbody>{rows}</tbody></table></section>
 <section class="cards">{cards}</section>
 <p class="note">같은 폴더에 <code>graph1_waveforms.png</code>, <code>graph2_overlay.png</code>,
