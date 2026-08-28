@@ -81,8 +81,9 @@ def graph2(results: list[dict], out: Path) -> Path:
     n = len(results)
     h = 5.6 + .45 * n
     fig = plt.figure(figsize=(13, h), facecolor=SURF)
+    lab = .055 + .006 * max(len(r["name"]) for r in results)   # 이름표가 길면 왼쪽을 더 준다
     gs = fig.add_gridspec(2, 1, height_ratios=[3.2, max(.8, .28 * n)], hspace=.16,
-                          top=1 - 1.15 / h, bottom=.62 / h, left=.075, right=.985)
+                          top=1 - 1.15 / h, bottom=.62 / h, left=min(lab, .16), right=.985)
     ax, axr = fig.add_subplot(gs[0]), fig.add_subplot(gs[1])
     span, ymax = 0.0, 10.0
     for i, r in enumerate(results):
@@ -123,7 +124,7 @@ def graph2(results: list[dict], out: Path) -> Path:
     axr.set_xlabel("time relative to each file's first spike (s)", fontsize=9, color=INK2)
     axr.set_title("spike times, same relative axis", loc="left", fontsize=9.5, color=INK2, pad=4)
     fig.suptitle("Graph 2  -  All recordings overlaid, aligned on their first spike (t = 0)",
-                 x=.075, ha="left", fontsize=14, color=INK, y=1 - .32 / h)
+                 x=min(lab, .16), ha="left", fontsize=14, color=INK, y=1 - .32 / h)
     fig.savefig(out, dpi=150, facecolor=SURF)
     plt.close(fig)
     return out
