@@ -146,7 +146,7 @@ def api_run():
         latest.unlink()
     latest.symlink_to(d.name)
 
-    summary = [{"name": r["name"], "filename": r["filename"], "color": report.color_of(i),
+    summary = [{"name": r["name"], "filename": r["filename"], "color": report.color_of(i, len(results)),
                 "window": [r["t0"], r["t1"]], "thr": r["thr"], "max_ratio": r["max_ratio"],
                 "spikes": len(r["times"]), "anchor": r["abs_anchor"],
                 "stats": r["stats"], "dominant": r["dominant"], "regularity": r["regularity"],

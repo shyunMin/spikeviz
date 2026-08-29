@@ -101,8 +101,14 @@ code{font-family:"IBM Plex Mono",monospace;font-size:.92em;background:var(--chip
 CHROME = ("google-chrome", "google-chrome-stable", "chromium", "chromium-browser", "chrome")
 
 
-def color_of(i: int) -> str:
-    return SLOTS[i] if i < len(SLOTS) else EXTRA
+def color_of(i: int, n: int | None = None) -> str:
+    """색은 최신 8개에만 준다. 그보다 오래된 파일은 회색(이름표로 구분).
+
+    n(전체 개수)을 주면 뒤에서부터 8개가 색을 받는다. 파일 목록이 이름순 =
+    시간순이므로 목록의 끝이 최신이다.
+    """
+    j = i if n is None else i - max(0, n - len(SLOTS))
+    return SLOTS[j] if 0 <= j < len(SLOTS) else EXTRA
 
 
 def mmss(t: float) -> str:
@@ -134,7 +140,7 @@ def graph1(results: list[dict], out: Path) -> Path:
     fig.subplots_adjust(hspace=.55, top=1 - .78 / h, bottom=.7 / h, left=.085, right=.98)
     fmt = FuncFormatter(lambda v, _: mmss(v))
     for ax, r, i in zip(axes, results, range(n)):
-        c = color_of(i)
+        c = color_of(i, n)
         tt, mn, mx = _minmax(r["wave"], r["sr"])
         tt = tt + r["t0"]
         _strip(ax)
@@ -167,7 +173,7 @@ def graph2(results: list[dict], out: Path) -> Path:
     ax, axr = fig.add_subplot(gs[0]), fig.add_subplot(gs[1])
     span, ymax = 0.0, 10.0
     for i, r in enumerate(results):
-        c = color_of(i)
+        c = color_of(i, n)
         k = int(round(r["anchor"] / r["dt"]))
         e = r["env"][k:] / r["floor"]
         g = 10
@@ -182,7 +188,7 @@ def graph2(results: list[dict], out: Path) -> Path:
         ax.plot(tr, e, color=c, lw=1.0, alpha=.85,
                 label=f"{r['name']}  ({kind} @ {mmss(r['abs_anchor'])})")
     for i, r in enumerate(results):
-        c, y = color_of(i), n - 1 - i
+        c, y = color_of(i, n), n - 1 - i
         sp = [t - r["anchor"] for t in r["times"] if t >= r["anchor"]]
         axr.plot([0, r["t1"] - r["t0"] - r["anchor"]], [y, y], color=c, lw=.8, alpha=.28)
         axr.plot(sp, [y] * len(sp), "|", ms=13, mew=2, color=c)
@@ -301,8 +307,10 @@ def observations(results: list[dict]) -> list[str]:
                      "은(는) 길이가 짧아 앞부분을 자르지 않고 전체를 썼습니다. 다른 파일에서 잘라낸 "
                      "구간이 여기에는 포함되므로 직접 비교할 때 주의해야 합니다.")
     if len(results) > len(SLOTS):
-        notes.append(f"<b>색 슬롯을 넘는 파일이 있습니다.</b> 9번째부터는 그래프에서 회색으로 그려집니다"
-                     f"(총 {len(results)}개). 이름표로 구분하세요.")
+        old = results[:len(results) - len(SLOTS)]
+        notes.append(f"<b>색은 최신 {len(SLOTS)}개에만 줬습니다.</b> 총 {len(results)}개라 그보다 오래된 "
+                     f"{len(old)}개(" + ", ".join(html.escape(r["name"]) for r in old) +
+                     ")는 그래프에서 회색으로 그립니다. 이름표로 구분하세요.")
     return notes
 
 
@@ -358,10 +366,10 @@ def write_html(results: list[dict], params: dict, run_id: str, g1: Path, g2: Pat
                  f'<td>{num(g["R"])} <i>/ {num(g["r_needed"])}</i></td>'
                  f'<td>{num(g["period"], "{:.1f}")}</td>'
                  f'<td>{num(s["median"], "{:.1f}") if s else "–"}</td>')
-        rows += (f'<tr><td><span class="dot" style="background:{color_of(i)}"></span>'
+        rows += (f'<tr><td><span class="dot" style="background:{color_of(i, len(results))}"></span>'
                  f'{html.escape(r["name"])}</td><td>{len(r["times"])}</td><td>{r["thr"]:.0f}×</td>'
                  f'{cells}<td>{mmss(r["abs_anchor"])}</td></tr>')
-    cards = "\n".join(_card(r, color_of(i)) for i, r in enumerate(results))
+    cards = "\n".join(_card(r, color_of(i, len(results))) for i, r in enumerate(results))
     notes = "".join(f"<li>{t}</li>" for t in observations(results)) or "<li>관찰할 항목이 없습니다.</li>"
     p = params
     n_sur = next((r["regularity"]["n_sur"] for r in results if r["regularity"]["n_sur"]), 300)
