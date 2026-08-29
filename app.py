@@ -148,7 +148,7 @@ def api_run():
 
     summary = [{"name": r["name"], "filename": r["filename"], "color": report.color_of(i, len(results)),
                 "window": [r["t0"], r["t1"]], "thr": r["thr"], "max_ratio": r["max_ratio"],
-                "spikes": len(r["times"]), "anchor": r["abs_anchor"],
+                "spikes": len(r["times"]), "anchor": r["abs_anchor"], "source": r["source"],
                 "stats": r["stats"], "dominant": r["dominant"], "regularity": r["regularity"],
                 "intervals": [round(v, 2) for v in r["intervals"]]}
                for i, r in enumerate(results)]

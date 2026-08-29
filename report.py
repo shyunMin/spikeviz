@@ -61,6 +61,8 @@ figure img{display:block;width:100%;min-width:760px;background:var(--figbg);bord
 .voff{--vbg:var(--chip);--vline:var(--line);--vink:var(--ink3)}
 .bok{background:#0f8f5f;color:#fff} .bwarn{background:#b07d10;color:#fff}
 .boff{background:var(--chip);color:var(--ink2)}
+.bman{background:#3d5a80;color:#fff}
+.manual{font-size:12.5px;color:#3d5a80;font-weight:500}
 .guide{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:20px 22px;
  box-shadow:var(--shadow);display:flex;flex-direction:column;gap:12px}
 .guide dl{margin:0;display:grid;grid-template-columns:minmax(130px,auto) 1fr;gap:10px 18px;font-size:14px}
@@ -151,8 +153,10 @@ def graph1(results: list[dict], out: Path) -> Path:
         ax.set_ylim(-lim, lim)
         ax.set_xlim(r["t0"], r["t1"])
         ax.xaxis.set_major_formatter(fmt)
+        how = ("MANUAL count" if r.get("source") == "manual"
+               else f"threshold {r['thr']:.0f}x noise floor")
         ax.set_title(f"{r['filename']}   |   analysed {mmss(r['t0'])}-{mmss(r['t1'])}"
-                     f"   |   threshold {r['thr']:.0f}x noise floor   |   {len(r['times'])} spikes (v)",
+                     f"   |   {how}   |   {len(r['times'])} spikes (v)",
                      loc="left", fontsize=10.5, color=INK, pad=7)
         ax.set_ylabel("amplitude", fontsize=8.5, color=INK2)
     axes[-1].set_xlabel("time in file (m:ss)", fontsize=9, color=INK2)
@@ -216,7 +220,8 @@ def graph2(results: list[dict], out: Path, baseline: str | None = None) -> Path:
         ymax_raw = max(ymax_raw, e.max() * 2.2)
         ymin_raw = min(ymin_raw, r["floor"] * .6)
         axr_.plot(tr, e, color=c, lw=1.0, alpha=.85,
-                  label=f"{r['name']}" + ("  (baseline)" if i == base_i else ""))
+                  label=f"{r['name']}" + ("  (baseline)" if i == base_i else "")
+                        + ("  [manual]" if r.get("source") == "manual" else ""))
         xs, ys = _spike_marks(r, normalise=False)
         axr_.plot(xs, ys, "v", ms=5.5, color=c, mec=SURF, mew=.5, alpha=.95)
     axr_.set_yscale("log")
@@ -237,8 +242,9 @@ def graph2(results: list[dict], out: Path, baseline: str | None = None) -> Path:
         span, ymax = max(span, tr[-1]), max(ymax, e.max() * 2.0)
         ax.fill_between(tr, 1, e, color=c, lw=0, alpha=.18)
         kind = "first spike" if r["anchor_kind"] == "first_spike" else "max amplitude, no spike"
+        tag = " manual" if r.get("source") == "manual" else ""
         ax.plot(tr, e, color=c, lw=.9, alpha=.8,
-                label=f"{r['name']}  ({kind} @ {mmss(r['abs_anchor'])}, {len(r['times'])} spikes)")
+                label=f"{r['name']}  ({kind} @ {mmss(r['abs_anchor'])}, {len(r['times'])}{tag} spikes)")
         xs, ys = _spike_marks(r, normalise=True)
         ax.plot(xs, ys, "v", ms=4.5, color=c, mec=SURF, mew=.4, alpha=.95)
     ax.set_yscale("log")
@@ -351,7 +357,15 @@ def observations(results: list[dict]) -> list[str]:
                                f"간격 중앙값 {r['stats']['median']:.1f}초)" for r in dense) +
                      " — 주기적인 스파이크 사이에 다른 소리가 섞여 간격 중앙값이 주기보다 짧게 나옵니다.")
 
-    weakdet = [r for r in results if r["times"] and r["max_ratio"] < 20]
+    man = [r for r in results if r.get("source") == "manual"]
+    if man:
+        notes.append("<b>수동 측정을 쓴 파일:</b> " +
+                     ", ".join(f"{html.escape(r['name'])}({len(r['times'])}개"
+                               + (f"/기록 {r['manual_total']}개" if r.get("manual_total")
+                                  and r["manual_total"] != len(r["times"]) else "") + ")"
+                               for r in man) +
+                     " — 자동 검출 대신 귀로 센 기록을 그대로 썼습니다. 나머지 파일은 자동 검출입니다.")
+    weakdet = [r for r in results if r["times"] and r["max_ratio"] < 20 and r.get("source") != "manual"]
     if weakdet:
         notes.append("<b>검출 임계에 겨우 걸친 파일이 있습니다.</b> " +
                      ", ".join(f"{html.escape(r['name'])}(최대 {r['max_ratio']:.0f}×)" for r in weakdet) +
@@ -388,6 +402,13 @@ def _card(r: dict, c: str) -> str:
                      for t, x in zip(r["abs_times"], r["ratios"]))
     anchor = "첫 스파이크" if r["anchor_kind"] == "first_spike" else "최대 진폭(스파이크 없음)"
     vclass = {"규칙적": "ok", "약한 규칙성": "warn"}.get(g["verdict"], "off")
+    is_manual = r.get("source") == "manual"
+    how = "스파이크 수동 측정" if is_manual else f"임계 {r['thr']:.0f}×"
+    extra = (f" (기록 {r['manual_total']}개 중 분석 구간 안 {len(r['times'])}개)"
+             if r.get("manual_total") else "")
+    manual_tag = (f'<p class="manual">스파이크 수동 측정 — 귀로 센 기록을 그대로 씁니다{extra}</p>'
+                  if is_manual else "")
+
     if g["p"] is None:
         vmetrics = '<span>스파이크가 5개 미만이라 규칙성을 계산하지 않았습니다.</span>'
     else:
@@ -398,8 +419,9 @@ def _card(r: dict, c: str) -> str:
                     f'{g["r_needed"]:.2f})</i></span>')
     return f'''<article class="card" style="--c:{c}">
   <header><h3>{html.escape(r["filename"])}</h3>
-    <p class="meta">분석 구간 {mmss(r['t0'])}–{mmss(r['t1'])} · 임계 {r['thr']:.0f}× · 최대 {r['max_ratio']:.0f}×
-      · 스파이크 {len(r['times'])}개 · 기준점 {mmss(r['abs_anchor'])} ({anchor})</p></header>
+    <p class="meta">분석 구간 {mmss(r['t0'])}–{mmss(r['t1'])} · {how} · 최대 {r['max_ratio']:.0f}×
+      · 스파이크 {len(r['times'])}개 · 기준점 {mmss(r['abs_anchor'])} ({anchor})</p>
+    {manual_tag}</header>
   <div class="verdict v{vclass}">
     <span class="badge">{g["verdict"]}</span>
     {vmetrics}
@@ -425,14 +447,19 @@ def write_html(results: list[dict], params: dict, run_id: str, g1: Path, g2: Pat
                  f'<td>{num(g["R"])} <i>/ {num(g["r_needed"])}</i></td>'
                  f'<td>{num(g["period"], "{:.1f}")}</td>'
                  f'<td>{num(s["median"], "{:.1f}") if s else "–"}</td>')
+        how = ('<span class="badge bman">수동</span>' if r.get("source") == "manual"
+               else f'{r["thr"]:.0f}×')
         rows += (f'<tr><td><span class="dot" style="background:{color_of(i, len(results))}"></span>'
-                 f'{html.escape(r["name"])}</td><td>{len(r["times"])}</td><td>{r["thr"]:.0f}×</td>'
+                 f'{html.escape(r["name"])}</td><td>{len(r["times"])}</td><td>{how}</td>'
                  f'{cells}<td>{mmss(r["abs_anchor"])}</td></tr>')
     cards = "\n".join(_card(r, color_of(i, len(results))) for i, r in enumerate(results))
     notes = "".join(f"<li>{t}</li>" for t in observations(results)) or "<li>관찰할 항목이 없습니다.</li>"
     p = params
     n_sur = next((r["regularity"]["n_sur"] for r in results if r["regularity"]["n_sur"]), 300)
     n_sur1, pmin = n_sur + 1, 1 / (n_sur + 1)
+    n_man = sum(1 for r in results if r.get("source") == "manual")
+    manual_note = (f" 단, 수동 측정 기록이 있는 {n_man}개 파일은 그 기록을 그대로 씁니다."
+                   if n_man else "")
     win = (f"{p['skip_s']:.0f}초 이후 최대 {p['max_s'] / 60:.0f}분. 앞을 자르면 남는 길이가 "
            f"{p['min_keep_s']:.0f}초 미만인 파일은 전체 사용.")
     thr_rule = (f"잡음 바닥 대비 max({p['k_abs']:.0f}×, min({p.get('k_cap', 20):.0f}×, "
@@ -454,7 +481,7 @@ def write_html(results: list[dict], params: dict, run_id: str, g1: Path, g2: Pat
 <section class="rule">
   <div><b>분석 구간</b><span>{win}</span></div>
   <div><b>파형 측정</b><span>{p['hop_ms']} ms 프레임의 피크 엔벌로프({p['sr']} Hz 모노). 짧은 클릭이 평균에 묻히지 않습니다.</span></div>
-  <div><b>스파이크 판정</b><span>{thr_rule}</span></div>
+  <div><b>스파이크 판정</b><span>{thr_rule}{manual_note}</span></div>
   <div><b>그래프 2 정렬</b><span>각 파일의 첫 스파이크를 t = 0으로 두고 상대 시간으로 겹쳐 그림.</span></div>
   <div><b>규칙성 판정</b><span>최적 주기에서의 위상 집중도를, 같은 개수를 같은 구간에 무작위로 뿌린
     {n_sur}번과 비교해 p값을 냅니다. p≤0.01 규칙적 · p≤0.05 약한 규칙성 · 스파이크 12개 미만이면 판단 불가.</span></div>

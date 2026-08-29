@@ -80,6 +80,7 @@ table i{font-style:normal;color:var(--ink3);font-size:11.5px}
 .badge{font-size:12px;font-weight:500;padding:2px 9px;border-radius:20px;white-space:nowrap}
 .bok{background:#0f8f5f;color:#fff} .bwarn{background:#b07d10;color:#fff}
 .boff{background:var(--chip);color:var(--ink2)}
+.bman{background:#3d5a80;color:#fff}
 .dot{display:inline-block;width:8px;height:8px;border-radius:2px;margin-right:8px;vertical-align:1px}
 .notes{margin:0;padding-left:18px;color:var(--ink2);font-size:14px;display:flex;flex-direction:column;gap:6px}
 .tablewrap{overflow-x:auto}
@@ -314,7 +315,7 @@ function show(d){
     const s = f.stats, g = f.regularity;
     const cls = {"규칙적":"bok","약한 규칙성":"bwarn"}[g.verdict] || "boff";
     return `<tr><td><span class="dot" style="background:${f.color}"></span>${f.name}</td>
-      <td>${f.spikes}</td><td>${Math.round(f.thr)}×</td>
+      <td>${f.spikes}</td><td>${f.source==="manual"?'<span class="badge bman">수동</span>':Math.round(f.thr)+"×"}</td>
       <td><span class="badge ${cls}">${g.verdict}</span></td>
       <td>${g.p!=null?g.p.toFixed(3):"–"}</td><td>${fmt(g.cv,2)}</td>
       <td>${g.R!=null?`${fmt(g.R,2)} <i>/ ${fmt(g.r_needed,2)}</i>`:"–"}</td>

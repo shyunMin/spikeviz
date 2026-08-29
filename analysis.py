@@ -33,6 +33,28 @@ class Params:
         return asdict(self)
 
 
+MANUAL_DIR = Path(__file__).resolve().parent / "manual"
+
+
+def load_manual(stem: str) -> list[float] | None:
+    """manual/<이름>.txt 가 있으면 그 시각들을 초 단위로 돌려준다(파일 시작 기준)."""
+    f = MANUAL_DIR / f"{stem}.txt"
+    if not f.exists():
+        return None
+    times = []
+    for line in f.read_text().splitlines():
+        for tok in line.split("#")[0].replace(",", " ").split():
+            parts = tok.split(":")
+            try:
+                v = 0.0
+                for x in parts:
+                    v = v * 60 + float(x)
+            except ValueError:
+                continue
+            times.append(v)
+    return sorted(times) if times else None
+
+
 def probe_duration(path: str) -> float:
     out = subprocess.run([FFMPEG, "-hide_banner", "-i", str(path)],
                          capture_output=True, text=True).stderr
@@ -181,13 +203,28 @@ def analyze(path: str, p: Params) -> dict:
 
     floor = float(np.median(env))
     ratio = env / floor
-    cand = _peaks(ratio, dt, 5.0, p.refractory_s)
-    p90 = float(np.percentile(ratio[cand], 90)) if cand else 0.0
-    thr = max(p.k_abs, min(p.k_cap, p.k_rel * p90))
 
-    ev = _peaks(ratio, dt, thr, p.refractory_s)
-    times = [k * dt for k in ev]
-    ratios = [float(ratio[k]) for k in ev]
+    manual = load_manual(Path(path).stem)
+    if manual is not None:
+        # 수동 측정이 있으면 그것이 정답이다. 세기는 그 시각 부근에서 재기만 한다.
+        source, thr = "manual", 0.0
+        times, ratios = [], []
+        for t_abs in manual:
+            t = t_abs - t0
+            if not (0 <= t <= len(x) / p.sr):
+                continue
+            k = int(round(t / dt))
+            lo, hi = max(0, k - int(1.0 / dt)), min(len(ratio), k + int(1.0 / dt))
+            times.append(t)
+            ratios.append(float(ratio[lo:hi].max()) if hi > lo else 0.0)
+    else:
+        source = "auto"
+        cand = _peaks(ratio, dt, 5.0, p.refractory_s)
+        p90 = float(np.percentile(ratio[cand], 90)) if cand else 0.0
+        thr = max(p.k_abs, min(p.k_cap, p.k_rel * p90))
+        ev = _peaks(ratio, dt, thr, p.refractory_s)
+        times = [k * dt for k in ev]
+        ratios = [float(ratio[k]) for k in ev]
 
     if times:
         anchor, anchor_kind = times[0], "first_spike"
@@ -205,7 +242,8 @@ def analyze(path: str, p: Params) -> dict:
                     cv=float(a.std() / a.mean()) if a.mean() else None)
 
     return dict(
-        name=Path(path).stem, path=str(path), filename=Path(path).name,
+        name=Path(path).stem, path=str(path), filename=Path(path).name, source=source,
+        manual_total=len(manual) if manual is not None else None,
         duration=duration, t0=t0, t1=t0 + len(x) / p.sr, sr=p.sr, dt=dt,
         floor=floor, thr=thr, max_ratio=max(ratios) if ratios else float(ratio.max()),
         whole_file=(t0 == 0.0),

@@ -110,7 +110,8 @@ def main() -> None:
         num = lambda v, f="{:6.2f}": f.format(v) if v is not None else "     –"
         rr = f"{num(g['R'])}({num(g['r_needed'], '{:.2f}')})" if g["R"] is not None else "      –      "
         per = f"{g['period']:6.1f}s" if g["period"] else "      –"
-        print(f"  {r['name'].ljust(w)}  {len(r['times']):>7}  {r['thr']:>4.0f}×  {g['verdict']:8}"
+        how = "  수동" if r.get("source") == "manual" else f"{r['thr']:>4.0f}×"
+        print(f"  {r['name'].ljust(w)}  {len(r['times']):>7}  {how}  {g['verdict']:8}"
               f"{num(g['p'], '{:6.3f}')} {num(g['cv'])}  {rr} {per}"
               f"{num(s['median'], '{:9.1f}') if s else '        –'}s")
     print()
