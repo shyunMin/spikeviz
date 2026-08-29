@@ -376,7 +376,10 @@ def write_html(results: list[dict], params: dict, run_id: str, g1: Path, g2: Pat
     n_sur1, pmin = n_sur + 1, 1 / (n_sur + 1)
     win = (f"{p['skip_s']:.0f}초 이후 최대 {p['max_s'] / 60:.0f}분. 앞을 자르면 남는 길이가 "
            f"{p['min_keep_s']:.0f}초 미만인 파일은 전체 사용.")
-    thr_rule = f"잡음 바닥 대비 max({p['k_abs']:.0f}×, {p['k_rel']:.2f} × p90) 초과, {p['refractory_s']:.0f}초 이내 병합."
+    thr_rule = (f"잡음 바닥 대비 max({p['k_abs']:.0f}×, min({p.get('k_cap', 20):.0f}×, "
+                f"{p['k_rel']:.2f} × p90)) 초과, {p['refractory_s']:.0f}초 이내 병합. "
+                f"상한 {p.get('k_cap', 20):.0f}×는 큰 스파이크 몇 개 때문에 기준이 올라가 "
+                f"나머지가 빠지는 것을 막습니다.")
     page = f'''<title>Spike Interval Report</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+KR:wght@400;500;600&display=swap">
 <style>

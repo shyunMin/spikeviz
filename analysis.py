@@ -24,6 +24,8 @@ class Params:
     hop_ms: int = 10            # 엔벌로프 프레임
     k_abs: float = 10.0         # 잡음 바닥 대비 최소 배율
     k_rel: float = 0.35         # 후보 피크 p90 대비 비율
+    k_cap: float = 20.0         # 임계 상한. 큰 스파이크 몇 개 때문에 기준이 올라가는 것을 막는다
+                                # (수동 카운트 두 건과 대조해 정한 값)
     refractory_s: float = 1.0   # 이 안에 붙은 피크는 하나로 병합
 
     def to_dict(self):
@@ -180,7 +182,7 @@ def analyze(path: str, p: Params) -> dict:
     ratio = env / floor
     cand = _peaks(ratio, dt, 5.0, p.refractory_s)
     p90 = float(np.percentile(ratio[cand], 90)) if cand else 0.0
-    thr = max(p.k_abs, p.k_rel * p90)
+    thr = max(p.k_abs, min(p.k_cap, p.k_rel * p90))
 
     ev = _peaks(ratio, dt, thr, p.refractory_s)
     times = [k * dt for k in ev]

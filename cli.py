@@ -47,6 +47,7 @@ def main() -> None:
     ap.add_argument("--min-keep", type=float, default=d.min_keep_s, help="이보다 짧게 남으면 파일 전체 사용")
     ap.add_argument("--k-abs", type=float, default=d.k_abs, help="잡음 바닥 대비 최소 배율")
     ap.add_argument("--k-rel", type=float, default=d.k_rel, help="후보 p90 대비 계수")
+    ap.add_argument("--k-cap", type=float, default=d.k_cap, help="임계 상한 (잡음 바닥 대비 배율)")
     ap.add_argument("--refractory", type=float, default=d.refractory_s, help="이 안에 붙은 피크는 병합")
     ap.add_argument("--hop-ms", type=int, default=d.hop_ms, help="엔벌로프 프레임 ms")
     ap.add_argument("--sr", type=int, default=d.sr, help="분석 샘플레이트")
@@ -69,7 +70,7 @@ def main() -> None:
         return
 
     p = Params(skip_s=a.skip, max_s=a.max, min_keep_s=a.min_keep, sr=a.sr, hop_ms=a.hop_ms,
-               k_abs=a.k_abs, k_rel=a.k_rel, refractory_s=a.refractory)
+               k_abs=a.k_abs, k_rel=a.k_rel, k_cap=a.k_cap, refractory_s=a.refractory)
     print(f"[spikeviz] {len(files)}개 파일 분석 시작")
     results = []
     for f in files:

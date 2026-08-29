@@ -124,13 +124,14 @@ code{font-family:"IBM Plex Mono",monospace;background:var(--chip);padding:1px 5p
       <label class="f"><span>전체 사용 기준 <b>min_keep_s</b> (초)</span><input type="number" id="min_keep_s" step="5" min="0"></label>
       <label class="f"><span>최소 배율 <b>k_abs</b> (× 잡음바닥)</span><input type="number" id="k_abs" step="1" min="1"></label>
       <label class="f"><span>상대 계수 <b>k_rel</b> (× p90)</span><input type="number" id="k_rel" step="0.05" min="0"></label>
+      <label class="f"><span>임계 상한 <b>k_cap</b> (× 잡음바닥)</span><input type="number" id="k_cap" step="1" min="1"></label>
       <label class="f"><span>병합 간격 <b>refractory_s</b> (초)</span><input type="number" id="refractory_s" step="0.1" min="0"></label>
       <label class="f"><span>엔벌로프 프레임 <b>hop_ms</b> (ms)</span><input type="number" id="hop_ms" step="1" min="1"></label>
       <label class="f"><span>분석 샘플레이트 <b>sr</b> (Hz)</span><input type="number" id="sr" step="1000" min="4000"></label>
       <label class="f"><span>[기능 2] 국소 바닥 대비 <b>k_local</b></span><input type="number" id="k_local" step="1" min="1"></label>
       <label class="f"><span>[기능 2] 최대 지속폭 <b>max_sustain_s</b> (초)</span><input type="number" id="max_sustain_s" step="0.05" min="0.02"></label>
     </div>
-    <p class="hint" style="margin-top:10px">스파이크 판정 = 잡음 바닥 대비 <code>max(k_abs, k_rel × p90)</code> 초과.
+    <p class="hint" style="margin-top:10px">스파이크 판정 = 잡음 바닥 대비 <code>max(k_abs, min(k_cap, k_rel × p90))</code> 초과.
       값을 비우면 기본값으로 돌아갑니다. <button class="ghost" id="reset" type="button" style="padding:5px 10px;font-size:12.5px">기본값으로</button></p>
   </details>
   <div class="runbar">
@@ -159,7 +160,7 @@ code{font-family:"IBM Plex Mono",monospace;background:var(--chip);padding:1px 5p
 
 <script>
 const $ = s => document.querySelector(s);
-const FIELDS = ["skip_s","max_s","min_keep_s","k_abs","k_rel","refractory_s","hop_ms","sr"];
+const FIELDS = ["skip_s","max_s","min_keep_s","k_abs","k_rel","k_cap","refractory_s","hop_ms","sr"];
 const LONG_FIELDS = ["k_local","max_sustain_s"];
 let defaults = {}, longDefaults = {};
 const mmss = t => `${Math.floor(t/60)}:${String(Math.floor(t%60)).padStart(2,"0")}`;
