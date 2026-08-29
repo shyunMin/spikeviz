@@ -18,6 +18,86 @@ from matplotlib.ticker import FuncFormatter
 SLOTS = ["#2a78d6", "#eb6834", "#1baf7a", "#4a3aa7", "#e87ba4", "#008300", "#eda100", "#e34948"]
 EXTRA = "#8a8985"
 INK, INK2, INK3, SURF, GRID = "#0b0b0b", "#52514e", "#8a8985", "#fcfcfb", "#e6e5e1"
+CSS = """:root{--bg:#f2f4f6;--panel:#fff;--line:#dfe3e8;--ink:#12171c;--ink2:#48525e;--ink3:#77828f;
+ --shadow:0 1px 2px rgba(18,23,28,.05),0 6px 22px -14px rgba(18,23,28,.28);--chip:#eaeef3;--figbg:#fcfcfb}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#12161a;--panel:#191e24;--line:#2a323b;
+ --ink:#eef2f6;--ink2:#aab5c0;--ink3:#7d8894;--shadow:0 1px 2px rgba(0,0,0,.4);--chip:#232b33;--figbg:#f4f4f2}}
+:root[data-theme="dark"]{--bg:#12161a;--panel:#191e24;--line:#2a323b;--ink:#eef2f6;--ink2:#aab5c0;
+ --ink3:#7d8894;--shadow:0 1px 2px rgba(0,0,0,.4);--chip:#232b33;--figbg:#f4f4f2}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:"IBM Plex Sans KR",system-ui,sans-serif;
+ font-size:15.5px;line-height:1.65;-webkit-font-smoothing:antialiased}
+.wrap{max-width:1080px;margin:0 auto;padding:56px 24px 96px;display:flex;flex-direction:column;gap:38px}
+header.top{display:flex;flex-direction:column;gap:10px;border-bottom:1px solid var(--line);padding-bottom:24px}
+.eyebrow{font-family:"IBM Plex Mono",monospace;font-size:11.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink3);margin:0}
+h1{font-size:31px;font-weight:600;letter-spacing:-.015em;margin:0;text-wrap:balance}
+h2{font-size:19px;font-weight:600;margin:0 0 2px} h3{font-size:16.5px;font-weight:600;margin:0;font-family:"IBM Plex Mono",monospace}
+p{margin:0} .sub{color:var(--ink2);max-width:64ch}
+.rule{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:14px}
+.rule div{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:13px 15px;box-shadow:var(--shadow)}
+.rule b{display:block;font-family:"IBM Plex Mono",monospace;font-size:11.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink3);font-weight:500;margin-bottom:4px}
+.rule span{font-size:14px;color:var(--ink2)}
+figure{margin:0;background:var(--panel);border:1px solid var(--line);border-radius:12px;overflow:hidden;box-shadow:var(--shadow)}
+figure .cap{padding:16px 20px 4px;display:flex;flex-direction:column;gap:3px}
+figure .cap p{color:var(--ink2);font-size:14px}
+figure .imgbox{overflow-x:auto;padding:8px 12px 14px}
+figure img{display:block;width:100%;min-width:760px;background:var(--figbg);border-radius:6px}
+.cards{display:flex;flex-direction:column;gap:16px}
+.card{background:var(--panel);border:1px solid var(--line);border-left:3px solid var(--c);border-radius:10px;
+ padding:18px 20px 20px;box-shadow:var(--shadow);display:flex;flex-direction:column;gap:12px}
+.card header{display:flex;flex-direction:column;gap:3px} .card h3{color:var(--c)}
+.meta{font-size:13.5px;color:var(--ink3)}
+.stats{display:flex;flex-wrap:wrap;gap:8px 22px;font-size:14px;color:var(--ink2);font-variant-numeric:tabular-nums}
+.stats b{color:var(--ink);font-family:"IBM Plex Mono",monospace;font-weight:500;font-size:16px}
+.verdict{display:flex;flex-wrap:wrap;align-items:center;gap:8px 18px;font-size:13.5px;
+ color:var(--ink2);font-variant-numeric:tabular-nums;padding:9px 12px;border-radius:9px;
+ background:var(--vbg);border:1px solid var(--vline)}
+.verdict b{color:var(--ink);font-family:"IBM Plex Mono",monospace;font-weight:500;font-size:15px}
+.verdict i{font-style:normal;color:var(--ink3);font-size:12.5px}
+.badge{font-size:12.5px;font-weight:500;padding:2px 10px;border-radius:20px;
+ background:var(--vink);color:var(--panel);white-space:nowrap}
+.vok{--vbg:color-mix(in oklab,#0f8f5f 8%,var(--panel));--vline:color-mix(in oklab,#0f8f5f 28%,var(--panel));--vink:#0f8f5f}
+.vwarn{--vbg:color-mix(in oklab,#b07d10 9%,var(--panel));--vline:color-mix(in oklab,#b07d10 28%,var(--panel));--vink:#b07d10}
+.voff{--vbg:var(--chip);--vline:var(--line);--vink:var(--ink3)}
+.bok{background:#0f8f5f;color:#fff} .bwarn{background:#b07d10;color:#fff}
+.boff{background:var(--chip);color:var(--ink2)}
+.guide{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:20px 22px;
+ box-shadow:var(--shadow);display:flex;flex-direction:column;gap:12px}
+.guide dl{margin:0;display:grid;grid-template-columns:minmax(130px,auto) 1fr;gap:10px 18px;font-size:14px}
+.guide dt{font-weight:500;color:var(--ink)}
+.guide dd{margin:0;color:var(--ink2)}
+.stats .dom{background:var(--chip);border-radius:7px;padding:2px 10px;color:var(--ink)}
+.stats .dom i{font-style:normal;color:var(--ink3);font-size:12.5px}
+.stats .dom.none{color:var(--ink3)}
+table i{font-style:normal;color:var(--ink3);font-size:12px}
+.lbl{font-size:12px;letter-spacing:.06em;color:var(--ink3);text-transform:uppercase;font-family:"IBM Plex Mono",monospace}
+.chips{display:flex;flex-wrap:wrap;gap:5px}
+.iv{font-family:"IBM Plex Mono",monospace;font-size:12.5px;padding:3px 8px;border-radius:5px;background:var(--chip);color:var(--ink2);font-variant-numeric:tabular-nums}
+.none{font-size:13px;color:var(--ink3)}
+.times{display:flex;flex-wrap:wrap;gap:4px 10px;font-family:"IBM Plex Mono",monospace;font-size:12.5px;color:var(--ink2)}
+.times .t i{font-style:normal;color:var(--ink3);margin-left:3px;font-size:11px}
+.tablewrap{overflow-x:auto;background:var(--panel);border:1px solid var(--line);border-radius:12px;box-shadow:var(--shadow)}
+table{border-collapse:collapse;width:100%;font-size:14px;font-variant-numeric:tabular-nums;min-width:660px}
+th,td{text-align:right;padding:11px 16px;border-bottom:1px solid var(--line);white-space:nowrap}
+th:first-child,td:first-child{text-align:left;font-family:"IBM Plex Mono",monospace}
+th{font-size:11.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink3);font-weight:500}
+tbody tr:last-child td{border-bottom:none}
+.dot{display:inline-block;width:8px;height:8px;border-radius:2px;margin-right:8px;vertical-align:1px}
+.find{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:20px 22px;box-shadow:var(--shadow);display:flex;flex-direction:column;gap:9px}
+.find ul{margin:0;padding-left:19px;display:flex;flex-direction:column;gap:7px;color:var(--ink2)}
+.find b{color:var(--ink);font-weight:500}
+.note{font-size:13.5px;color:var(--ink3);max-width:70ch}
+code{font-family:"IBM Plex Mono",monospace;font-size:.92em;background:var(--chip);padding:1px 5px;border-radius:4px}
+@media print{
+ :root{--bg:#fff;--panel:#fff;--line:#d7dbe0;--shadow:none;--figbg:#fff}
+ @page{size:A4;margin:14mm 12mm} body{background:#fff;font-size:10.5px}
+ .wrap{max-width:none;padding:0;gap:20px} h1{font-size:23px} h2{font-size:15px} h3{font-size:13px}
+ figure,.card,.find,.guide,.tablewrap,.rule div{break-inside:avoid;box-shadow:none}
+ figure img{min-width:0} .imgbox,.tablewrap{overflow:visible}
+ table{min-width:0;font-size:9.5px} th,td{padding:7px 9px}
+ *{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+}"""
+
 CHROME = ("google-chrome", "google-chrome-stable", "chromium", "chromium-browser", "chrome")
 
 
@@ -292,85 +372,7 @@ def write_html(results: list[dict], params: dict, run_id: str, g1: Path, g2: Pat
     page = f'''<title>Spike Interval Report</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+KR:wght@400;500;600&display=swap">
 <style>
-:root{{--bg:#f2f4f6;--panel:#fff;--line:#dfe3e8;--ink:#12171c;--ink2:#48525e;--ink3:#77828f;
- --shadow:0 1px 2px rgba(18,23,28,.05),0 6px 22px -14px rgba(18,23,28,.28);--chip:#eaeef3;--figbg:#fcfcfb}}
-@media (prefers-color-scheme:dark){{:root:not([data-theme="light"]){{--bg:#12161a;--panel:#191e24;--line:#2a323b;
- --ink:#eef2f6;--ink2:#aab5c0;--ink3:#7d8894;--shadow:0 1px 2px rgba(0,0,0,.4);--chip:#232b33;--figbg:#f4f4f2}}}}
-:root[data-theme="dark"]{{--bg:#12161a;--panel:#191e24;--line:#2a323b;--ink:#eef2f6;--ink2:#aab5c0;
- --ink3:#7d8894;--shadow:0 1px 2px rgba(0,0,0,.4);--chip:#232b33;--figbg:#f4f4f2}}
-*{{box-sizing:border-box}}
-body{{margin:0;background:var(--bg);color:var(--ink);font-family:"IBM Plex Sans KR",system-ui,sans-serif;
- font-size:15.5px;line-height:1.65;-webkit-font-smoothing:antialiased}}
-.wrap{{max-width:1080px;margin:0 auto;padding:56px 24px 96px;display:flex;flex-direction:column;gap:38px}}
-header.top{{display:flex;flex-direction:column;gap:10px;border-bottom:1px solid var(--line);padding-bottom:24px}}
-.eyebrow{{font-family:"IBM Plex Mono",monospace;font-size:11.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink3);margin:0}}
-h1{{font-size:31px;font-weight:600;letter-spacing:-.015em;margin:0;text-wrap:balance}}
-h2{{font-size:19px;font-weight:600;margin:0 0 2px}} h3{{font-size:16.5px;font-weight:600;margin:0;font-family:"IBM Plex Mono",monospace}}
-p{{margin:0}} .sub{{color:var(--ink2);max-width:64ch}}
-.rule{{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:14px}}
-.rule div{{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:13px 15px;box-shadow:var(--shadow)}}
-.rule b{{display:block;font-family:"IBM Plex Mono",monospace;font-size:11.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink3);font-weight:500;margin-bottom:4px}}
-.rule span{{font-size:14px;color:var(--ink2)}}
-figure{{margin:0;background:var(--panel);border:1px solid var(--line);border-radius:12px;overflow:hidden;box-shadow:var(--shadow)}}
-figure .cap{{padding:16px 20px 4px;display:flex;flex-direction:column;gap:3px}}
-figure .cap p{{color:var(--ink2);font-size:14px}}
-figure .imgbox{{overflow-x:auto;padding:8px 12px 14px}}
-figure img{{display:block;width:100%;min-width:760px;background:var(--figbg);border-radius:6px}}
-.cards{{display:flex;flex-direction:column;gap:16px}}
-.card{{background:var(--panel);border:1px solid var(--line);border-left:3px solid var(--c);border-radius:10px;
- padding:18px 20px 20px;box-shadow:var(--shadow);display:flex;flex-direction:column;gap:12px}}
-.card header{{display:flex;flex-direction:column;gap:3px}} .card h3{{color:var(--c)}}
-.meta{{font-size:13.5px;color:var(--ink3)}}
-.stats{{display:flex;flex-wrap:wrap;gap:8px 22px;font-size:14px;color:var(--ink2);font-variant-numeric:tabular-nums}}
-.stats b{{color:var(--ink);font-family:"IBM Plex Mono",monospace;font-weight:500;font-size:16px}}
-.verdict{{display:flex;flex-wrap:wrap;align-items:center;gap:8px 18px;font-size:13.5px;
- color:var(--ink2);font-variant-numeric:tabular-nums;padding:9px 12px;border-radius:9px;
- background:var(--vbg);border:1px solid var(--vline)}}
-.verdict b{{color:var(--ink);font-family:"IBM Plex Mono",monospace;font-weight:500;font-size:15px}}
-.verdict i{{font-style:normal;color:var(--ink3);font-size:12.5px}}
-.badge{{font-size:12.5px;font-weight:500;padding:2px 10px;border-radius:20px;
- background:var(--vink);color:var(--panel);white-space:nowrap}}
-.vok{{--vbg:color-mix(in oklab,#0f8f5f 8%,var(--panel));--vline:color-mix(in oklab,#0f8f5f 28%,var(--panel));--vink:#0f8f5f}}
-.vwarn{{--vbg:color-mix(in oklab,#b07d10 9%,var(--panel));--vline:color-mix(in oklab,#b07d10 28%,var(--panel));--vink:#b07d10}}
-.voff{{--vbg:var(--chip);--vline:var(--line);--vink:var(--ink3)}}
-.bok{{background:#0f8f5f;color:#fff}} .bwarn{{background:#b07d10;color:#fff}}
-.boff{{background:var(--chip);color:var(--ink2)}}
-.guide{{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:20px 22px;
- box-shadow:var(--shadow);display:flex;flex-direction:column;gap:12px}}
-.guide dl{{margin:0;display:grid;grid-template-columns:minmax(130px,auto) 1fr;gap:10px 18px;font-size:14px}}
-.guide dt{{font-weight:500;color:var(--ink)}}
-.guide dd{{margin:0;color:var(--ink2)}}
-.stats .dom{{background:var(--chip);border-radius:7px;padding:2px 10px;color:var(--ink)}}
-.stats .dom i{{font-style:normal;color:var(--ink3);font-size:12.5px}}
-.stats .dom.none{{color:var(--ink3)}}
-table i{{font-style:normal;color:var(--ink3);font-size:12px}}
-.lbl{{font-size:12px;letter-spacing:.06em;color:var(--ink3);text-transform:uppercase;font-family:"IBM Plex Mono",monospace}}
-.chips{{display:flex;flex-wrap:wrap;gap:5px}}
-.iv{{font-family:"IBM Plex Mono",monospace;font-size:12.5px;padding:3px 8px;border-radius:5px;background:var(--chip);color:var(--ink2);font-variant-numeric:tabular-nums}}
-.none{{font-size:13px;color:var(--ink3)}}
-.times{{display:flex;flex-wrap:wrap;gap:4px 10px;font-family:"IBM Plex Mono",monospace;font-size:12.5px;color:var(--ink2)}}
-.times .t i{{font-style:normal;color:var(--ink3);margin-left:3px;font-size:11px}}
-.tablewrap{{overflow-x:auto;background:var(--panel);border:1px solid var(--line);border-radius:12px;box-shadow:var(--shadow)}}
-table{{border-collapse:collapse;width:100%;font-size:14px;font-variant-numeric:tabular-nums;min-width:660px}}
-th,td{{text-align:right;padding:11px 16px;border-bottom:1px solid var(--line);white-space:nowrap}}
-th:first-child,td:first-child{{text-align:left;font-family:"IBM Plex Mono",monospace}}
-th{{font-size:11.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink3);font-weight:500}}
-tbody tr:last-child td{{border-bottom:none}}
-.dot{{display:inline-block;width:8px;height:8px;border-radius:2px;margin-right:8px;vertical-align:1px}}
-.find{{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:20px 22px;box-shadow:var(--shadow);display:flex;flex-direction:column;gap:9px}}
-.find ul{{margin:0;padding-left:19px;display:flex;flex-direction:column;gap:7px;color:var(--ink2)}}
-.find b{{color:var(--ink);font-weight:500}}
-.note{{font-size:13.5px;color:var(--ink3);max-width:70ch}}
-code{{font-family:"IBM Plex Mono",monospace;font-size:.92em;background:var(--chip);padding:1px 5px;border-radius:4px}}
-@media print{{
- :root{{--bg:#fff;--panel:#fff;--line:#d7dbe0;--shadow:none;--figbg:#fff}}
- @page{{size:A4;margin:14mm 12mm}} body{{background:#fff;font-size:10.5px}}
- .wrap{{max-width:none;padding:0;gap:20px}} h1{{font-size:23px}} h2{{font-size:15px}} h3{{font-size:13px}}
- figure,.card,.find,.guide,.tablewrap,.rule div{{break-inside:avoid;box-shadow:none}}
- figure img{{min-width:0}} .imgbox,.tablewrap{{overflow:visible}}
- table{{min-width:0;font-size:9.5px}} th,td{{padding:7px 9px}}
- *{{-webkit-print-color-adjust:exact;print-color-adjust:exact}}
-}}
+{CSS}
 </style>
 <div class="wrap">
 <header class="top">
@@ -445,3 +447,238 @@ def write_pdf(html_path: Path, out: Path) -> Path | None:
                         "--virtual-time-budget=10000", html_path.resolve().as_uri()],
                        capture_output=True, text=True, timeout=180)
     return out if out.exists() else None
+
+
+# ---------------------------------------------------------------- 기능 2 (긴 파일)
+
+def graph_long_timeline(r: dict, out: Path) -> Path:
+    """전체 시간축: 엔벌로프, 국소 잡음 바닥, 살아남은 스파이크."""
+    fig, ax = plt.subplots(figsize=(13, 4.4), facecolor=SURF)
+    fig.subplots_adjust(top=.86, bottom=.13, left=.075, right=.985)
+    h = lambda v: (r["t0"] + v) / 3600
+    _strip(ax)
+    ax.fill_between([h(v) for v in r["t_plot"]], 1e-6, r["env_plot"], color=SLOTS[0], lw=0, alpha=.45)
+    ax.plot([h(v) for v in r["t_plot"]], r["floor_plot"], color=INK, lw=1.1, alpha=.75,
+            label="local noise floor (10 s median)")
+    top = max(r["env_plot"].max(), 1e-5)
+    ax.plot([h(t) for t in r["times"]], [top * 1.35] * len(r["times"]), marker="v", ls="none",
+            ms=4, color=SLOTS[1], mec="none", clip_on=False, label=f"kept spikes ({len(r['times'])})")
+    ax.set_yscale("log")
+    ax.set_ylim(max(r["floor_plot"].min() * .3, 1e-6), top * 1.8)
+    ax.set_xlim(h(0), h(r["span"]))
+    ax.set_ylabel("peak amplitude (log)", fontsize=9, color=INK2)
+    ax.set_xlabel("time in file (hours)", fontsize=9, color=INK2)
+    ax.legend(frameon=False, fontsize=9, labelcolor=INK2, loc="lower left",
+              bbox_to_anchor=(0, 1.005, 1, .08), mode="expand", ncols=2, borderaxespad=0, handlelength=1.6)
+    fig.suptitle(f"Long-form 1  -  {r['filename']}: envelope, local noise floor, kept spikes",
+                 x=.075, ha="left", fontsize=13.5, color=INK, y=.965)
+    fig.savefig(out, dpi=150, facecolor=SURF)
+    plt.close(fig)
+    return out
+
+
+def graph_long_trend(r: dict, out: Path) -> Path:
+    """간격의 시간 변화와 구간별 빈도."""
+    t = np.asarray(r["times"], dtype=float)
+    iv = np.asarray(r["intervals"], dtype=float)
+    tr, segs = r["trend"], r["segments"]
+    fig = plt.figure(figsize=(13, 7.2), facecolor=SURF)
+    gs = fig.add_gridspec(2, 1, height_ratios=[1.5, 1], hspace=.28, top=.9, bottom=.08,
+                          left=.075, right=.985)
+    ax, axb = fig.add_subplot(gs[0]), fig.add_subplot(gs[1])
+    for a in (ax, axb):
+        _strip(a)
+        a.set_xlim(0, r["span"] / 3600)
+
+    mid = (t[1:] + t[:-1]) / 2 / 3600
+    ax.plot(mid, iv, "o", ms=3.2, color=SLOTS[0], alpha=.5, mec="none", label="interval")
+    if len(iv) >= 9:                                   # 이동 중앙값
+        w = max(5, len(iv) // 20 | 1)
+        roll = np.array([np.median(iv[max(0, i - w // 2):i + w // 2 + 1]) for i in range(len(iv))])
+        ax.plot(mid, roll, color=SLOTS[3], lw=1.8, label=f"rolling median ({w})")
+    if tr["slope_per_hour"] is not None:
+        x = np.array([0, r["span"] / 3600])
+        y = np.median(iv) + tr["slope_per_hour"] * (x - np.median(mid))
+        ax.plot(x, y, color=SLOTS[1], lw=2, ls=(0, (5, 3)),
+                label=f"trend {tr['slope_per_hour']:+.2f} s/hour")
+    ax.set_ylabel("interval between spikes (s)", fontsize=9, color=INK2)
+    ax.set_ylim(0, np.percentile(iv, 99) * 1.25 if len(iv) else 1)
+    ax.legend(frameon=False, fontsize=9, labelcolor=INK2, loc="lower left",
+              bbox_to_anchor=(0, 1.005, 1, .08), mode="expand", ncols=3, borderaxespad=0, handlelength=1.8)
+
+    xs = [(s["t0"] + s["t1"]) / 2 / 3600 for s in segs]
+    w = (segs[0]["t1"] - segs[0]["t0"]) / 3600 * .82
+    axb.bar(xs, [s["rate_per_min"] for s in segs], width=w, color=SLOTS[2], alpha=.85)
+    axb.set_ylabel("spikes per minute", fontsize=9, color=INK2)
+    axb.set_xlabel("time in file (hours)", fontsize=9, color=INK2)
+    axb.set_title("rate per segment", loc="left", fontsize=9.5, color=INK2, pad=4)
+    fig.suptitle(f"Long-form 2  -  {r['filename']}: interval trend and rate over time",
+                 x=.075, ha="left", fontsize=13.5, color=INK, y=.975)
+    fig.savefig(out, dpi=150, facecolor=SURF)
+    plt.close(fig)
+    return out
+
+
+def long_observations(r: dict) -> list[str]:
+    notes = []
+    tr, g = r["trend"], r["regularity"]
+    if tr["verdict"] == "일정":
+        notes.append(f"<b>빈도는 일정합니다.</b> 간격 추세의 기울기가 "
+                     f"{tr['slope_per_hour']:+.2f}초/시간이고 p={tr['p']:.3f}로, 시간에 따른 변화를 "
+                     f"우연과 구별할 수 없습니다.")
+    elif tr["verdict"] != "표본 부족":
+        notes.append(f"<b>빈도가 {tr['verdict']}.</b> 간격이 시간당 {tr['slope_per_hour']:+.2f}초씩 "
+                     f"변합니다(p={tr['p']:.1e}). 처음 10% 구간 평균 {tr['first']:.1f}초 → "
+                     f"마지막 10% {tr['last']:.1f}초, {tr['change_pct']:+.0f}%.")
+    reg_segs = [s for s in r["segments"] if s["verdict"] in ("규칙적", "약한 규칙성")]
+    if g["verdict"] not in ("규칙적", "약한 규칙성") and len(reg_segs) >= len(r["segments"]) / 2:
+        notes.append(f"<b>전체로는 한 주기로 설명되지 않지만 구간별로는 규칙적입니다.</b> "
+                     f"{len(r['segments'])}개 구간 중 {len(reg_segs)}개가 규칙적으로 판정됐습니다. "
+                     f"주기가 시간에 따라 변하고 있다는 뜻입니다.")
+    elif g["verdict"] in ("규칙적", "약한 규칙성"):
+        notes.append(f"<b>전체 구간이 하나의 주기로 설명됩니다.</b> 주기 {g['period']:.1f}초, "
+                     f"위상 집중도 {g['R']:.2f}(필요값 {g['r_needed']:.2f}), p={g['p']:.3f}.")
+    rej = r["rejected"]
+    tot = sum(rej.values()) + len(r["times"])
+    if sum(rej.values()):
+        notes.append(f"<b>잡음으로 제외한 것이 {sum(rej.values())}건입니다.</b> 후보 {tot}건 중 "
+                     f"지속시간 초과 {rej['지속시간']}건(말소리·음악·문 닫는 소리처럼 길게 이어지는 소리), "
+                     f"주변 소음 {rej['주변소음']}건(앞뒤가 조용하지 않아 판단할 수 없는 것). "
+                     f"잡음 구간에 겹친 진짜 스파이크도 함께 빠지므로 그 구간의 빈도는 낮게 나올 수 있습니다.")
+    if r["floor_max"] / max(r["floor_min"], 1e-9) > 5:
+        notes.append(f"<b>녹음 환경이 시간에 따라 크게 변했습니다.</b> 국소 잡음 바닥이 "
+                     f"{r['floor_min']:.5f}에서 {r['floor_max']:.5f}까지 "
+                     f"{r['floor_max'] / r['floor_min']:.0f}배 움직입니다. 전역 단일 임계값을 썼다면 "
+                     f"조용한 구간에서는 거짓 검출이, 시끄러운 구간에서는 누락이 났을 것입니다.")
+    quiet = [s for s in r["segments"] if s["n"] == 0]
+    if quiet:
+        notes.append(f"<b>스파이크가 하나도 없는 구간이 {len(quiet)}개 있습니다.</b> " +
+                     ", ".join(f"{s['t0'] / 3600:.1f}–{s['t1'] / 3600:.1f}h" for s in quiet[:6]) +
+                     ("…" if len(quiet) > 6 else "") + ".")
+    return notes
+
+
+def write_long_csv(r: dict, out: Path) -> Path:
+    lines = ["kind,index,time_s,time_hms,peak_x_local_floor,interval_from_prev_s"]
+    hms = lambda t: f"{int(t) // 3600}:{int(t) % 3600 // 60:02d}:{int(t) % 60:02d}"
+    prev = None
+    for i, (t, x) in enumerate(zip(r["times"], r["ratios"]), 1):
+        at = r["t0"] + t
+        lines.append(f"spike,{i},{at:.2f},{hms(at)},{x:.1f},{'' if prev is None else f'{t - prev:.2f}'}")
+        prev = t
+    lines.append("")
+    lines.append("kind,index,start_s,end_s,spikes,rate_per_min,median_interval_s,verdict")
+    for i, s in enumerate(r["segments"], 1):
+        med = f"{s['median_iv']:.2f}" if s["median_iv"] else ""
+        lines.append(f"segment,{i},{r['t0'] + s['t0']:.0f},{r['t0'] + s['t1']:.0f},{s['n']},"
+                     f"{s['rate_per_min']:.3f},{med},{s['verdict']}")
+    out.write_text("\n".join(lines) + "\n")
+    return out
+
+
+def write_long_json(r: dict, params: dict, out: Path) -> Path:
+    payload = dict(params=params, mode="long",
+                   file={k: v for k, v in r.items() if k not in ("env_plot", "floor_plot", "t_plot")})
+    out.write_text(json.dumps(payload, indent=1, ensure_ascii=False))
+    return out
+
+
+def write_long_html(r: dict, params: dict, run_id: str, g1: Path, g2: Path, out: Path) -> Path:
+    b64 = lambda p: base64.b64encode(p.read_bytes()).decode()
+    tr, g, p = r["trend"], r["regularity"], params
+    hm = lambda t: f"{int(t) // 3600}시간 {int(t) % 3600 // 60}분"
+    tclass = {"빨라짐": "warn", "느려짐": "warn", "일정": "ok"}.get(tr["verdict"], "off")
+    gclass = {"규칙적": "ok", "약한 규칙성": "warn"}.get(g["verdict"], "off")
+    num = lambda v, f="{:.2f}": f.format(v) if v is not None else "–"
+
+    seg_rows = ""
+    for s in r["segments"]:
+        cls = {"규칙적": "ok", "약한 규칙성": "warn"}.get(s["verdict"], "off")
+        seg_rows += (f'<tr><td>{(r["t0"] + s["t0"]) / 3600:.2f}–{(r["t0"] + s["t1"]) / 3600:.2f}h</td>'
+                     f'<td>{s["n"]}</td><td>{s["rate_per_min"]:.2f}</td>'
+                     f'<td>{num(s["median_iv"], "{:.1f}")}</td><td>{num(s["cv"])}</td>'
+                     f'<td><span class="badge b{cls}">{s["verdict"]}</span></td>'
+                     f'<td>{num(s["p"], "{:.3f}")}</td></tr>')
+    notes = "".join(f"<li>{t}</li>" for t in long_observations(r)) or "<li>관찰할 항목이 없습니다.</li>"
+    rej = r["rejected"]
+    page = f'''<title>Long Recording Trend</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+KR:wght@400;500;600&display=swap">
+<style>
+{CSS}
+</style>
+<div class="wrap">
+<header class="top">
+  <p class="eyebrow">long-form · {html.escape(run_id)}</p>
+  <h1>{html.escape(r["filename"])} — 스파이크 빈도 변화</h1>
+  <p class="sub">긴 녹음에서 스파이크가 아닌 소리를 걸러내고, 스파이크가 나는 빈도가 시간에 따라
+     일정한지 빨라지는지 느려지는지 봤습니다. 녹음 길이 {hm(r["duration"])} 중
+     {hm(r["span"])}을 분석했습니다.</p>
+</header>
+
+<section class="verdict v{tclass}" style="font-size:15px">
+  <span class="badge">빈도 {tr["verdict"]}</span>
+  <span>기울기 <b>{num(tr["slope_per_hour"], "{:+.2f}")}</b>초/시간</span>
+  <span>p <b>{num(tr["p"], "{:.2g}")}</b></span>
+  <span>처음 <b>{num(tr["first"], "{:.1f}")}</b>초 → 마지막 <b>{num(tr["last"], "{:.1f}")}</b>초
+    <i>({num(tr["change_pct"], "{:+.0f}")}%)</i></span>
+  <span class="badge b{gclass}">전체 {g["verdict"]}</span>
+</section>
+
+<section class="rule">
+  <div><b>분석 구간</b><span>{p["skip_s"]:.0f}초 이후 전체. 스트리밍으로 읽어 길이에 관계없이 메모리를 적게 씁니다.</span></div>
+  <div><b>국소 잡음 바닥</b><span>{p["floor_block_s"]:.0f}초 블록 중앙값을 이어 붙여 환경 변화를 따라갑니다.
+    이번 파일에서는 {r["floor_min"]:.5f}~{r["floor_max"]:.5f}로 움직였습니다.</span></div>
+  <div><b>잡음 제거</b><span>국소 바닥의 {p["k_local"]:.0f}배를 넘고, 지속폭이 {p["max_sustain_s"] * 1000:.0f}ms 이하이며,
+    앞뒤 {p["guard_s"]:.0f}초가 조용한 것만 스파이크로 인정합니다.</span></div>
+  <div><b>추세 판정</b><span>간격 대 시각의 Theil–Sen 기울기와 Mann–Kendall 검정(p≤0.05일 때만 변화로 판정).</span></div>
+</section>
+
+<figure>
+  <div class="cap"><h2>전체 시간축</h2>
+  <p>파란 영역이 소리의 세기(로그), 검은 선이 국소 잡음 바닥, 주황 ▼ 가 잡음 필터를 통과한 스파이크입니다.</p></div>
+  <div class="imgbox"><img src="data:image/png;base64,{b64(g1)}" alt="전체 시간축 엔벌로프와 검출된 스파이크"></div>
+</figure>
+
+<figure>
+  <div class="cap"><h2>간격 추세와 구간별 빈도</h2>
+  <p>위: 스파이크 간격을 시각에 대해 찍고 이동 중앙값과 추세선을 겹쳤습니다. 아래: 구간별 분당 스파이크 수.</p></div>
+  <div class="imgbox"><img src="data:image/png;base64,{b64(g2)}" alt="간격 추세와 구간별 빈도"></div>
+</figure>
+
+<section class="guide"><h2>지표 읽는 법</h2>
+  <dl>
+    <dt>국소 잡음 바닥</dt>
+    <dd>몇 시간짜리 녹음은 시간대에 따라 배경 소음이 달라집니다. 전역 임계값 하나를 쓰면 조용한 구간에서는
+        거짓 검출이, 시끄러운 구간에서는 누락이 납니다. 그래서 {p["floor_block_s"]:.0f}초 블록마다 중앙값을 재고
+        그 선을 기준으로 몇 배 튀는지를 봅니다.</dd>
+    <dt>지속폭 필터</dt>
+    <dd>스파이크는 짧고 날카롭습니다. 피크 주변에서 바닥의 {p["sustain_k"]:.0f}배를 넘는 구간이
+        {p["max_sustain_s"] * 1000:.0f}ms를 넘으면 말소리·음악·문 닫는 소리로 보고 버립니다.
+        앞뒤 {p["guard_s"]:.0f}초가 조용하지 않아도 버립니다 — 잡음 속에 묻힌 것은 판단할 수 없기 때문입니다.</dd>
+    <dt>Theil–Sen 기울기</dt>
+    <dd>간격이 시간당 몇 초씩 변하는지. 점들의 모든 짝을 이어 만든 기울기의 중앙값이라, 이상치 몇 개에
+        끌려가지 않습니다. 음수면 간격이 짧아지는 것 = 빨라지는 것입니다.</dd>
+    <dt>Mann–Kendall p값</dt>
+    <dd>그 추세가 우연인지 봅니다. 값의 크기가 아니라 순서만 보는 검정이라 분포를 가정하지 않습니다.
+        p ≤ 0.05일 때만 빨라짐/느려짐으로 판정하고, 그렇지 않으면 '일정'입니다.</dd>
+    <dt>구간별 규칙성</dt>
+    <dd>구간마다 기능 1과 같은 방식(위상 집중도 + 무작위 대조)으로 규칙성을 판정합니다.
+        주기가 서서히 변하는 녹음은 <b>전체로는 불규칙, 구간별로는 규칙적</b>으로 나옵니다 —
+        이 조합이 곧 '주기가 변하고 있다'는 신호입니다.</dd>
+  </dl>
+</section>
+
+<section class="find"><h2>자동 관찰</h2><ul>{notes}</ul></section>
+
+<section class="tablewrap"><table>
+  <thead><tr><th>구간</th><th>스파이크</th><th>분당 횟수</th><th>간격 중앙값(초)</th><th>CV</th>
+    <th>구간 규칙성</th><th>p값</th></tr></thead>
+  <tbody>{seg_rows}</tbody></table></section>
+
+<p class="note">스파이크 {len(r["times"])}개 검출 · 잡음으로 제외 {sum(rej.values())}건
+ (지속시간 {rej["지속시간"]} / 주변소음 {rej["주변소음"]}) · 엔벌로프 프레임 {r["n_frames"]:,}개.
+ 같은 폴더에 <code>timeline.png</code>, <code>trend.png</code>, <code>spikes_and_segments.csv</code>,
+ <code>long_report.json</code>, <code>report.pdf</code> 가 있습니다.</p>
+</div>'''
+    out.write_text(page)
+    return out

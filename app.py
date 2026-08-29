@@ -10,6 +10,7 @@ from pathlib import Path
 from flask import Flask, jsonify, render_template, request, send_from_directory
 
 from analysis import AUDIO_EXT, Params, analyze, probe_duration, window_of
+from longform import LongParams, analyze_long
 import report
 
 BASE = Path(__file__).resolve().parent
@@ -63,6 +64,7 @@ def api_state():
     mark_missing(s["files"])
     s["runs"] = [d.name for d in sorted(OUTPUT.glob("run_*"), reverse=True)] if OUTPUT.exists() else []
     s["defaults"] = Params().to_dict()
+    s["long_defaults"] = LongParams().to_dict()
     return jsonify(s)
 
 
@@ -152,6 +154,37 @@ def api_run():
                for i, r in enumerate(results)]
     return jsonify(run_id=run_id, dir=str(d), files=summary, failed=failed,
                    pdf=bool(pdf), notes=report.observations(results))
+
+
+@app.post("/api/run_long")
+def api_run_long():
+    """기능 2: 파일 하나를 잡음 제거 + 빈도 변화로 분석한다."""
+    target = (request.json or {}).get("path", "")
+    if not Path(target).exists():
+        return jsonify(error="파일을 찾을 수 없습니다."), 400
+    incoming = (request.json or {}).get("params") or {}
+    fields = LongParams().to_dict()
+    params = LongParams(**{k: type(v)(incoming.get(k, v)) for k, v in fields.items()})
+    try:
+        r = analyze_long(target, params)
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify(error=f"분석 실패: {e}"), 500
+
+    run_id = "long_" + datetime.now().strftime("%Y%m%d_%H%M%S") + "_" + Path(target).stem
+    d = OUTPUT / run_id
+    d.mkdir(parents=True, exist_ok=True)
+    g1 = report.graph_long_timeline(r, d / "timeline.png")
+    g2 = report.graph_long_trend(r, d / "trend.png")
+    report.write_long_csv(r, d / "spikes_and_segments.csv")
+    report.write_long_json(r, params.to_dict(), d / "long_report.json")
+    html_path = report.write_long_html(r, params.to_dict(), run_id, g1, g2, d / "report.html")
+    pdf = report.write_pdf(html_path, d / "report.pdf")
+    return jsonify(run_id=run_id, mode="long", pdf=bool(pdf), name=r["name"],
+                   span=r["span"], spikes=len(r["times"]), rejected=r["rejected"],
+                   trend=r["trend"], regularity=r["regularity"],
+                   segments=[{k: v for k, v in s.items()} for s in r["segments"]],
+                   notes=report.long_observations(r))
 
 
 @app.get("/runs/<run_id>/<path:filename>")

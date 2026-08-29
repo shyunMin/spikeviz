@@ -96,10 +96,18 @@ def dominant_interval(intervals, tol: float = 0.25) -> dict | None:
                 lo=float(grp.min()), hi=float(grp.max()), std=float(grp.std()))
 
 
-def _vector_strength(t: np.ndarray, periods: np.ndarray) -> np.ndarray:
-    """주기 후보마다, 스파이크들이 그 주기의 같은 위상에 얼마나 모이는지(0~1)."""
-    phase = 2 * np.pi * t[:, None] / periods[None, :]
-    return np.abs(np.exp(1j * phase).mean(axis=0))
+def _vector_strength(t: np.ndarray, periods: np.ndarray, max_cells: int = 4_000_000) -> np.ndarray:
+    """주기 후보마다, 스파이크들이 그 주기의 같은 위상에 얼마나 모이는지(0~1).
+
+    스파이크가 많으면 t×periods 행렬이 커지므로 주기를 잘라서 계산한다.
+    """
+    step = max(1, int(max_cells // max(len(t), 1)))
+    out = np.empty(len(periods))
+    for a in range(0, len(periods), step):
+        chunk = periods[a:a + step]
+        phase = 2 * np.pi * t[:, None] / chunk[None, :]
+        out[a:a + step] = np.abs(np.exp(1j * phase).mean(axis=0))
+    return out
 
 
 def regularity(times, span: float, n_sur: int = 300, seed: int = 0) -> dict:

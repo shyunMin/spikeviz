@@ -36,6 +36,7 @@ input[type=text]:focus-visible,button:focus-visible,summary:focus-visible{outlin
 button{border:0;border-radius:8px;padding:11px 18px;font:inherit;font-weight:500;font-size:14px;
  background:var(--accent);color:var(--accent-ink);cursor:pointer}
 button.ghost{background:var(--chip);color:var(--ink2)}
+button.small{padding:5px 11px;font-size:12.5px;white-space:nowrap}
 button:disabled{opacity:.55;cursor:progress}
 .hint{font-size:13px;color:var(--ink3)}
 ul.files{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:1px;
@@ -105,7 +106,9 @@ code{font-family:"IBM Plex Mono",monospace;background:var(--chip);padding:1px 5p
            autocomplete="off" spellcheck="false">
     <button id="add">추가</button>
   </div>
-  <p class="hint">파일 경로를 넣으면 그 파일 하나, 폴더 경로를 넣으면 그 안의 음원 전부를 추가합니다. <code>~</code> 도 씁니다.</p>
+  <p class="hint">파일 경로를 넣으면 그 파일 하나, 폴더 경로를 넣으면 그 안의 음원 전부를 추가합니다. <code>~</code> 도 씁니다.<br>
+    아래 <b>분석 실행</b>은 목록 전체를 비교하는 <b>기능 1</b>이고, 각 파일의 <b>긴 파일 분석</b>은 그 파일 하나를
+    잡음 제거 후 빈도 변화로 보는 <b>기능 2</b>입니다.</p>
   <p class="msg" id="addmsg"></p>
   <ul class="files" id="list"></ul>
   <p class="empty" id="empty">아직 추가된 파일이 없습니다.</p>
@@ -124,6 +127,8 @@ code{font-family:"IBM Plex Mono",monospace;background:var(--chip);padding:1px 5p
       <label class="f"><span>병합 간격 <b>refractory_s</b> (초)</span><input type="number" id="refractory_s" step="0.1" min="0"></label>
       <label class="f"><span>엔벌로프 프레임 <b>hop_ms</b> (ms)</span><input type="number" id="hop_ms" step="1" min="1"></label>
       <label class="f"><span>분석 샘플레이트 <b>sr</b> (Hz)</span><input type="number" id="sr" step="1000" min="4000"></label>
+      <label class="f"><span>[기능 2] 국소 바닥 대비 <b>k_local</b></span><input type="number" id="k_local" step="1" min="1"></label>
+      <label class="f"><span>[기능 2] 최대 지속폭 <b>max_sustain_s</b> (초)</span><input type="number" id="max_sustain_s" step="0.05" min="0.02"></label>
     </div>
     <p class="hint" style="margin-top:10px">스파이크 판정 = 잡음 바닥 대비 <code>max(k_abs, k_rel × p90)</code> 초과.
       값을 비우면 기본값으로 돌아갑니다. <button class="ghost" id="reset" type="button" style="padding:5px 10px;font-size:12.5px">기본값으로</button></p>
@@ -155,7 +160,8 @@ code{font-family:"IBM Plex Mono",monospace;background:var(--chip);padding:1px 5p
 <script>
 const $ = s => document.querySelector(s);
 const FIELDS = ["skip_s","max_s","min_keep_s","k_abs","k_rel","refractory_s","hop_ms","sr"];
-let defaults = {};
+const LONG_FIELDS = ["k_local","max_sustain_s"];
+let defaults = {}, longDefaults = {};
 const mmss = t => `${Math.floor(t/60)}:${String(Math.floor(t%60)).padStart(2,"0")}`;
 const fmt = (v,d=1) => v==null ? "–" : Number(v).toFixed(d);
 
@@ -165,10 +171,13 @@ function renderFiles(files){
       <div class="col"><span class="nm">${f.filename}${f.missing?' <span class="gone">파일 없음</span>':''}</span>
         <span class="path">${f.path}</span></div>
       <span class="meta">${mmss(f.duration)} · ${(f.size/1048576).toFixed(1)} MB</span>
+      <button class="ghost small lg" data-path="${encodeURIComponent(f.path)}"
+        title="이 파일 하나를 잡음 제거 + 빈도 변화로 분석 (기능 2)">긴 파일 분석</button>
       <button class="x" data-path="${encodeURIComponent(f.path)}" title="목록에서 제거">×</button>
     </li>`).join("");
   $("#empty").hidden = files.length > 0;
   ul.hidden = files.length === 0;
+  ul.querySelectorAll(".lg").forEach(b => b.onclick = () => runLong(decodeURIComponent(b.dataset.path), b));
   ul.querySelectorAll(".x").forEach(b => b.onclick = async () => {
     const r = await fetch("/api/files/remove", {method:"POST", headers:{"Content-Type":"application/json"},
       body: JSON.stringify({path: decodeURIComponent(b.dataset.path)})});
@@ -184,8 +193,9 @@ function renderPast(runs){
 
 async function load(){
   const s = await (await fetch("/api/state")).json();
-  defaults = s.defaults;
+  defaults = s.defaults; longDefaults = s.long_defaults;
   FIELDS.forEach(k => $("#"+k).value = s.params[k] ?? defaults[k]);
+  LONG_FIELDS.forEach(k => $("#"+k).value = s.long_defaults[k]);
   renderFiles(s.files);
   renderPast(s.runs || []);
 }
@@ -206,7 +216,10 @@ $("#add").onclick = async () => {
   msg.textContent = `${d.added.length}개 추가${d.skipped.length ? ` · 건너뜀 ${d.skipped.length}개 (${d.skipped.join(", ")})` : ""}`;
 };
 $("#path").addEventListener("keydown", e => { if(e.key === "Enter") $("#add").click(); });
-$("#reset").onclick = () => FIELDS.forEach(k => $("#"+k).value = defaults[k]);
+$("#reset").onclick = () => {
+  FIELDS.forEach(k => $("#"+k).value = defaults[k]);
+  LONG_FIELDS.forEach(k => $("#"+k).value = longDefaults[k]);
+};
 
 $("#run").onclick = async () => {
   const params = {};
@@ -228,6 +241,58 @@ $("#run").onclick = async () => {
   }finally{ $("#run").disabled = false; }
 };
 
+async function runLong(path, btn){
+  const msg = $("#runmsg");
+  btn.disabled = true;
+  msg.className = "msg";
+  msg.innerHTML = '<span class="spin"></span> 긴 파일 분석 중… 1시간당 10초쯤 걸립니다.';
+  try{
+    const params = {skip_s: Number($("#skip_s").value || defaults.skip_s),
+                    sr: Number($("#sr").value || defaults.sr),
+                    hop_ms: Number($("#hop_ms").value || defaults.hop_ms)};
+    LONG_FIELDS.forEach(k => { const v = $("#"+k).value; params[k] = v === "" ? longDefaults[k] : Number(v); });
+    const r = await fetch("/api/run_long", {method:"POST", headers:{"Content-Type":"application/json"},
+      body: JSON.stringify({path, params})});
+    const d = await r.json();
+    if(!r.ok){ msg.className="msg err"; msg.textContent = d.error; return; }
+    showLong(d);
+    msg.textContent = `완료 — ${d.name}: ${(d.span/3600).toFixed(2)}시간, 스파이크 ${d.spikes}개`;
+    renderPast((await (await fetch("/api/state")).json()).runs || []);
+  }catch(e){ msg.className="msg err"; msg.textContent = "실행 실패: " + e; }
+  finally{ btn.disabled = false; }
+}
+
+function showLong(d){
+  $("#result").hidden = false;
+  $("#runid").textContent = d.run_id;
+  const base = `/runs/${d.run_id}/`;
+  const files = [["리포트 (HTML)","report.html"], ...(d.pdf?[["리포트 (PDF)","report.pdf"]]:[]),
+    ["스파이크·구간 CSV","spikes_and_segments.csv"], ["원자료 JSON","long_report.json"],
+    ["전체 시간축 PNG","timeline.png"], ["추세 PNG","trend.png"]];
+  $("#links").innerHTML = files.map(([t,f]) => `<a href="${base}${f}" target="_blank" rel="noopener">${t}</a>`).join("");
+  $("#notes").innerHTML = d.notes.map(n => `<li>${n}</li>`).join("");
+  const t = d.trend, g = d.regularity;
+  const tcls = t.verdict === "일정" ? "bok" : (t.verdict === "표본 부족" ? "boff" : "bwarn");
+  $("#sum thead").innerHTML = `<tr><th>구간</th><th>스파이크</th><th>분당 횟수</th><th>간격 중앙값(초)</th>
+    <th>CV</th><th>구간 규칙성</th><th>p값</th></tr>`;
+  $("#sum tbody").innerHTML =
+    `<tr><td colspan="7" style="text-align:left;padding-bottom:14px">
+      <span class="badge ${tcls}">빈도 ${t.verdict}</span>
+      ${t.slope_per_hour!=null?` 기울기 ${t.slope_per_hour.toFixed(2)}초/시간 · p ${t.p.toExponential(1)}
+      · ${fmt(t.first)}초 → ${fmt(t.last)}초` : ""}
+      · 전체 규칙성 ${g.verdict} · 잡음 제외 ${d.rejected["지속시간"]+d.rejected["주변소음"]}건
+    </td></tr>` +
+    d.segments.map(s => {
+      const c = {"규칙적":"bok","약한 규칙성":"bwarn"}[s.verdict] || "boff";
+      return `<tr><td>${(s.t0/3600).toFixed(2)}–${(s.t1/3600).toFixed(2)}h</td><td>${s.n}</td>
+        <td>${s.rate_per_min.toFixed(2)}</td><td>${s.median_iv!=null?fmt(s.median_iv):"–"}</td>
+        <td>${s.cv!=null?fmt(s.cv,2):"–"}</td><td><span class="badge ${c}">${s.verdict}</span></td>
+        <td>${s.p!=null?s.p.toFixed(3):"–"}</td></tr>`;
+    }).join("");
+  $("#shots").innerHTML = ["timeline.png","trend.png"]
+    .map(f => `<a href="${base}${f}" target="_blank" rel="noopener"><img src="${base}${f}?t=${Date.now()}" alt="${f}"></a>`).join("");
+}
+
 function show(d){
   $("#result").hidden = false;
   $("#runid").textContent = d.run_id;
@@ -238,6 +303,8 @@ function show(d){
   $("#links").innerHTML = files.map(([t,f]) => `<a href="${base}${f}" target="_blank" rel="noopener">${t}</a>`).join("")
     + (d.pdf ? "" : '<span class="hint">PDF는 Chrome이 없어 건너뛰었습니다.</span>');
   $("#notes").innerHTML = d.notes.map(n => `<li>${n}</li>`).join("");
+  $("#sum thead").innerHTML = `<tr><th>파일</th><th>스파이크</th><th>임계</th><th>규칙성 판정</th><th>p값</th>
+    <th>CV</th><th>R / 필요값</th><th>주기(초)</th><th>간격 중앙값(초)</th><th>첫 스파이크</th></tr>`;
   $("#sum tbody").innerHTML = d.files.map(f => {
     const s = f.stats, g = f.regularity;
     const cls = {"규칙적":"bok","약한 규칙성":"bwarn"}[g.verdict] || "boff";
