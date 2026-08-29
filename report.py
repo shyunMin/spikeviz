@@ -150,11 +150,12 @@ def write_json(results: list[dict], params: dict, out: Path) -> Path:
 
 
 def _period_groups(results: list[dict], tol: float = .15) -> list[list[dict]]:
-    """우세 간격이 서로 ±tol 안에 드는 파일끼리 묶는다(가까운 것부터 연결)."""
-    have = sorted((r for r in results if r["dominant"]), key=lambda r: r["dominant"]["period"])
+    """검출된 주기가 서로 ±tol 안에 드는 파일끼리 묶는다(가까운 것부터 연결)."""
+    have = sorted((r for r in results if r["regularity"]["period"]),
+                  key=lambda r: r["regularity"]["period"])
     groups: list[list[dict]] = []
     for r in have:
-        if groups and r["dominant"]["period"] <= groups[-1][-1]["dominant"]["period"] * (1 + tol):
+        if groups and r["regularity"]["period"] <= groups[-1][-1]["regularity"]["period"] * (1 + tol):
             groups[-1].append(r)
         else:
             groups.append([r])
@@ -164,52 +165,61 @@ def _period_groups(results: list[dict], tol: float = .15) -> list[list[dict]]:
 def observations(results: list[dict]) -> list[str]:
     """데이터에서 바로 계산되는 관찰만 만든다."""
     notes = []
-    scored = [r for r in results if r["dominant"]]
-    if scored:
-        best = max(scored, key=lambda r: (r["dominant"]["share"], -r["dominant"]["std"]))
-        d = best["dominant"]
-        notes.append(f"<b>{html.escape(best['name'])}가 가장 규칙적입니다.</b> 간격 {d['n']}개"
-                     f"({d['share'] * 100:.0f}%)가 {d['lo']:.1f}–{d['hi']:.1f}초에 몰려 있고 "
-                     f"대표값은 {d['period']:.1f}초입니다.")
+    by = lambda v: [r for r in results if r["regularity"]["verdict"] == v]
+    reg, weak, irr, unk = by("규칙적"), by("약한 규칙성"), by("불규칙"), by("판단 불가") + by("표본 부족")
+    name = lambda rs: ", ".join(html.escape(r["name"]) for r in rs)
+
+    if reg or weak:
+        notes.append(f"<b>규칙적으로 판정된 파일 {len(reg) + len(weak)}개 / 전체 {len(results)}개.</b> " +
+                     (f"규칙적(p≤0.01): {name(reg)}. " if reg else "") +
+                     (f"약한 규칙성(p≤0.05): {name(weak)}. " if weak else ""))
+    if irr:
+        notes.append(f"<b>불규칙으로 판정된 파일:</b> {name(irr)} — 스파이크가 충분히 많은데도 "
+                     "무작위로 뿌린 것과 구별되지 않습니다.")
+    if unk:
+        detail = ", ".join(f"{html.escape(r['name'])}(스파이크 {r['regularity']['n']}개, "
+                           f"R {r['regularity']['R']:.2f} &lt; 필요값 {r['regularity']['r_needed']:.2f})"
+                           if r["regularity"]["R"] else html.escape(r["name"]) for r in unk)
+        notes.append(f"<b>판단할 수 없는 파일:</b> {detail} — 규칙적이 <i>아니라</i>는 뜻이 아니라, "
+                     "스파이크가 적어 규칙적이어도 잡아낼 수 없다는 뜻입니다.")
 
     groups = _period_groups(results)
     big = max(groups, key=len) if groups else []
     if len(big) >= 2:
-        lo = min(r["dominant"]["period"] for r in big)
-        hi = max(r["dominant"]["period"] for r in big)
-        notes.append(f"<b>{len(big)}개 파일이 같은 주기 계열입니다.</b> " +
-                     ", ".join(f"{html.escape(r['name'])} {r['dominant']['period']:.1f}초" for r in big) +
-                     f" — 대표값이 {lo:.1f}–{hi:.1f}초 안에 모입니다.")
-    mixed = [r for r in results if r["dominant"] and r["dominant"]["share"] < .5]
-    if mixed:
-        notes.append("<b>부가 스파이크가 섞인 파일이 있습니다.</b> " +
-                     ", ".join(f"{html.escape(r['name'])}(우세 간격이 전체의 "
-                               f"{r['dominant']['share'] * 100:.0f}%, 전체 중앙값 "
-                               f"{r['stats']['median']:.1f}초 vs 우세 {r['dominant']['period']:.1f}초)"
-                               for r in mixed) +
-                     " — 주기적인 스파이크 사이에 짧은 간격의 스파이크가 끼어 전체 중앙값이 낮게 나옵니다. "
-                     "주기를 볼 때는 우세 간격 쪽을 보세요.")
-    nodom = [r for r in results if not r["dominant"] and r["times"]]
-    if nodom:
-        notes.append("<b>뚜렷한 주기가 없는 파일:</b> " +
-                     ", ".join(html.escape(r["name"]) for r in nodom) +
-                     ". 간격이 한 값 주위로 모이지 않아 대표 주기를 뽑지 않았습니다.")
-    weak = [r for r in results if r["times"] and r["max_ratio"] < 20]
-    if weak:
+        lo = min(r["regularity"]["period"] for r in big)
+        hi = max(r["regularity"]["period"] for r in big)
+        notes.append(f"<b>{len(big)}개 파일의 주기가 같은 계열입니다.</b> " +
+                     ", ".join(f"{html.escape(r['name'])} {r['regularity']['period']:.1f}초" for r in big) +
+                     f" — {lo:.1f}–{hi:.1f}초 안에 모입니다.")
+
+    skipped = [r for r in results if (r["regularity"]["skip_ratio"] or 0) >= 1.5]
+    if skipped:
+        notes.append("<b>주기를 건너뛰는 파일이 있습니다.</b> " +
+                     ", ".join(f"{html.escape(r['name'])}(주기 {r['regularity']['period']:.1f}초, "
+                               f"실제 간격은 그 {r['regularity']['skip_ratio']:.1f}배)" for r in skipped) +
+                     " — 소리가 나는 자리는 일정한 격자 위에 있지만 상당수 주기는 비어 있습니다. "
+                     "간격만 보면 격자 간격이 아니라 '보통 몇 초 만에 한 번'이 보입니다.")
+    dense = [r for r in results if r["regularity"]["skip_ratio"] and r["regularity"]["skip_ratio"] <= .7]
+    if dense:
+        notes.append("<b>주기 사이에 부가 스파이크가 끼는 파일이 있습니다.</b> " +
+                     ", ".join(f"{html.escape(r['name'])}(주기 {r['regularity']['period']:.1f}초, "
+                               f"간격 중앙값 {r['stats']['median']:.1f}초)" for r in dense) +
+                     " — 주기적인 스파이크 사이에 다른 소리가 섞여 간격 중앙값이 주기보다 짧게 나옵니다.")
+
+    weakdet = [r for r in results if r["times"] and r["max_ratio"] < 20]
+    if weakdet:
         notes.append("<b>검출 임계에 겨우 걸친 파일이 있습니다.</b> " +
-                     ", ".join(f"{html.escape(r['name'])}(최대 {r['max_ratio']:.0f}×)" for r in weak) +
-                     " — 스파이크가 잡음 대비 크게 튀지 않아 개수·간격의 신뢰도가 낮습니다.")
+                     ", ".join(f"{html.escape(r['name'])}(최대 {r['max_ratio']:.0f}×)" for r in weakdet) +
+                     " — 스파이크가 잡음 대비 크게 튀지 않아 검출 자체의 신뢰도가 낮습니다.")
     none = [r for r in results if not r["times"]]
     if none:
-        notes.append("<b>스파이크가 하나도 잡히지 않은 파일:</b> " +
-                     ", ".join(html.escape(r["name"]) for r in none) +
+        notes.append("<b>스파이크가 하나도 잡히지 않은 파일:</b> " + name(none) +
                      ". 그래프 2에서는 최대 진폭 지점을 기준점으로 썼습니다.")
     whole = [r for r in results if r["whole_file"]]
     if whole and len(whole) < len(results):
-        notes.append("<b>구간이 다른 파일이 섞여 있습니다.</b> " +
-                     ", ".join(html.escape(r["name"]) for r in whole) +
+        notes.append("<b>구간이 다른 파일이 섞여 있습니다.</b> " + name(whole) +
                      "은(는) 길이가 짧아 앞부분을 자르지 않고 전체를 썼습니다. 다른 파일에서 잘라낸 "
-                     "구간이 여기에는 포함되므로 간격을 직접 비교할 때 주의해야 합니다.")
+                     "구간이 여기에는 포함되므로 직접 비교할 때 주의해야 합니다.")
     if len(results) > len(SLOTS):
         notes.append(f"<b>색 슬롯을 넘는 파일이 있습니다.</b> 9번째부터는 그래프에서 회색으로 그려집니다"
                      f"(총 {len(results)}개). 이름표로 구분하세요.")
@@ -220,20 +230,33 @@ def _card(r: dict, c: str) -> str:
     s = r["stats"]
     chips = "".join(f'<span class="iv">{v:.1f}</span>' for v in r["intervals"]) \
         or '<span class="none">간격 없음</span>'
+    g = r["regularity"]
     d = r["dominant"]
-    dom = (f'<span class="dom"><b>{d["period"]:.1f}</b>초 우세 간격 '
-           f'<i>{d["n"]}/{s["n"]}개 · {d["lo"]:.1f}–{d["hi"]:.1f}초</i></span>') if d else \
-          '<span class="dom none">우세 간격 없음</span>'
+    dom = (f'<span class="dom">우세 간격 <b>{d["period"]:.1f}</b>초 '
+           f'<i>{d["n"]}/{s["n"]}개</i></span>') if d and s else ''
     stat = (f'{dom}<span><b>{s["median"]:.1f}</b>초 중앙값</span><span><b>{s["mean"]:.1f}</b>초 평균</span>'
             f'<span>{s["min"]:.1f}–{s["max"]:.1f}초 범위</span><span>σ {s["std"]:.1f}초</span>'
             f'<span>변동계수 {s["cv"]:.2f}</span>') if s else '<span>간격 통계 없음</span>'
     times = " ".join(f'<span class="t">{mmss(t)}<i>{x:.0f}×</i></span>'
                      for t, x in zip(r["abs_times"], r["ratios"]))
     anchor = "첫 스파이크" if r["anchor_kind"] == "first_spike" else "최대 진폭(스파이크 없음)"
+    vclass = {"규칙적": "ok", "약한 규칙성": "warn"}.get(g["verdict"], "off")
+    if g["p"] is None:
+        vmetrics = '<span>스파이크가 5개 미만이라 규칙성을 계산하지 않았습니다.</span>'
+    else:
+        per = (f'<span>주기 <b>{g["period"]:.1f}</b>초</span>') if g["period"] else ''
+        vmetrics = (f'{per}<span>p <b>{g["p"]:.3f}</b></span>'
+                    f'<span>CV <b>{g["cv"]:.2f}</b></span>'
+                    f'<span>위상 집중도 R <b>{g["R"]:.2f}</b> <i>(이 표본에서 필요한 값 '
+                    f'{g["r_needed"]:.2f})</i></span>')
     return f'''<article class="card" style="--c:{c}">
   <header><h3>{html.escape(r["filename"])}</h3>
     <p class="meta">분석 구간 {mmss(r['t0'])}–{mmss(r['t1'])} · 임계 {r['thr']:.0f}× · 최대 {r['max_ratio']:.0f}×
       · 스파이크 {len(r['times'])}개 · 기준점 {mmss(r['abs_anchor'])} ({anchor})</p></header>
+  <div class="verdict v{vclass}">
+    <span class="badge">{g["verdict"]}</span>
+    {vmetrics}
+  </div>
   <div class="stats">{stat}</div>
   <p class="lbl">스파이크 간격 (초, 앞 스파이크로부터)</p>
   <div class="chips">{chips}</div>
@@ -247,17 +270,22 @@ def write_html(results: list[dict], params: dict, run_id: str, g1: Path, g2: Pat
     rows = ""
     for i, r in enumerate(results):
         s = r["stats"]
-        d = r["dominant"]
-        dom = f"<b>{d['period']:.1f}</b> <i>({d['n']}/{s['n']})</i>" if d and s else "–"
-        cells = (f"<td>{dom}</td><td>{s['median']:.1f}</td><td>{s['mean']:.1f}</td>"
-                 f"<td>{s['min']:.1f} / {s['max']:.1f}</td><td>{s['cv']:.2f}</td>") if s \
-            else "<td>–</td><td>–</td><td>–</td><td>–</td><td>–</td>"
+        g = r["regularity"]
+        vclass = {"규칙적": "ok", "약한 규칙성": "warn"}.get(g["verdict"], "off")
+        num = lambda v, f="{:.2f}": f.format(v) if v is not None else "–"
+        cells = (f'<td><span class="badge b{vclass}">{g["verdict"]}</span></td>'
+                 f'<td>{num(g["p"], "{:.3f}")}</td><td>{num(g["cv"])}</td>'
+                 f'<td>{num(g["R"])} <i>/ {num(g["r_needed"])}</i></td>'
+                 f'<td>{num(g["period"], "{:.1f}")}</td>'
+                 f'<td>{num(s["median"], "{:.1f}") if s else "–"}</td>')
         rows += (f'<tr><td><span class="dot" style="background:{color_of(i)}"></span>'
                  f'{html.escape(r["name"])}</td><td>{len(r["times"])}</td><td>{r["thr"]:.0f}×</td>'
                  f'{cells}<td>{mmss(r["abs_anchor"])}</td></tr>')
     cards = "\n".join(_card(r, color_of(i)) for i, r in enumerate(results))
     notes = "".join(f"<li>{t}</li>" for t in observations(results)) or "<li>관찰할 항목이 없습니다.</li>"
     p = params
+    n_sur = next((r["regularity"]["n_sur"] for r in results if r["regularity"]["n_sur"]), 300)
+    n_sur1, pmin = n_sur + 1, 1 / (n_sur + 1)
     win = (f"{p['skip_s']:.0f}초 이후 최대 {p['max_s'] / 60:.0f}분. 앞을 자르면 남는 길이가 "
            f"{p['min_keep_s']:.0f}초 미만인 파일은 전체 사용.")
     thr_rule = f"잡음 바닥 대비 max({p['k_abs']:.0f}×, {p['k_rel']:.2f} × p90) 초과, {p['refractory_s']:.0f}초 이내 병합."
@@ -295,6 +323,23 @@ figure img{{display:block;width:100%;min-width:760px;background:var(--figbg);bor
 .meta{{font-size:13.5px;color:var(--ink3)}}
 .stats{{display:flex;flex-wrap:wrap;gap:8px 22px;font-size:14px;color:var(--ink2);font-variant-numeric:tabular-nums}}
 .stats b{{color:var(--ink);font-family:"IBM Plex Mono",monospace;font-weight:500;font-size:16px}}
+.verdict{{display:flex;flex-wrap:wrap;align-items:center;gap:8px 18px;font-size:13.5px;
+ color:var(--ink2);font-variant-numeric:tabular-nums;padding:9px 12px;border-radius:9px;
+ background:var(--vbg);border:1px solid var(--vline)}}
+.verdict b{{color:var(--ink);font-family:"IBM Plex Mono",monospace;font-weight:500;font-size:15px}}
+.verdict i{{font-style:normal;color:var(--ink3);font-size:12.5px}}
+.badge{{font-size:12.5px;font-weight:500;padding:2px 10px;border-radius:20px;
+ background:var(--vink);color:var(--panel);white-space:nowrap}}
+.vok{{--vbg:color-mix(in oklab,#0f8f5f 8%,var(--panel));--vline:color-mix(in oklab,#0f8f5f 28%,var(--panel));--vink:#0f8f5f}}
+.vwarn{{--vbg:color-mix(in oklab,#b07d10 9%,var(--panel));--vline:color-mix(in oklab,#b07d10 28%,var(--panel));--vink:#b07d10}}
+.voff{{--vbg:var(--chip);--vline:var(--line);--vink:var(--ink3)}}
+.bok{{background:#0f8f5f;color:#fff}} .bwarn{{background:#b07d10;color:#fff}}
+.boff{{background:var(--chip);color:var(--ink2)}}
+.guide{{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:20px 22px;
+ box-shadow:var(--shadow);display:flex;flex-direction:column;gap:12px}}
+.guide dl{{margin:0;display:grid;grid-template-columns:minmax(130px,auto) 1fr;gap:10px 18px;font-size:14px}}
+.guide dt{{font-weight:500;color:var(--ink)}}
+.guide dd{{margin:0;color:var(--ink2)}}
 .stats .dom{{background:var(--chip);border-radius:7px;padding:2px 10px;color:var(--ink)}}
 .stats .dom i{{font-style:normal;color:var(--ink3);font-size:12.5px}}
 .stats .dom.none{{color:var(--ink3)}}
@@ -321,7 +366,7 @@ code{{font-family:"IBM Plex Mono",monospace;font-size:.92em;background:var(--chi
  :root{{--bg:#fff;--panel:#fff;--line:#d7dbe0;--shadow:none;--figbg:#fff}}
  @page{{size:A4;margin:14mm 12mm}} body{{background:#fff;font-size:10.5px}}
  .wrap{{max-width:none;padding:0;gap:20px}} h1{{font-size:23px}} h2{{font-size:15px}} h3{{font-size:13px}}
- figure,.card,.find,.tablewrap,.rule div{{break-inside:avoid;box-shadow:none}}
+ figure,.card,.find,.guide,.tablewrap,.rule div{{break-inside:avoid;box-shadow:none}}
  figure img{{min-width:0}} .imgbox,.tablewrap{{overflow:visible}}
  table{{min-width:0;font-size:9.5px}} th,td{{padding:7px 9px}}
  *{{-webkit-print-color-adjust:exact;print-color-adjust:exact}}
@@ -339,8 +384,8 @@ code{{font-family:"IBM Plex Mono",monospace;font-size:.92em;background:var(--chi
   <div><b>파형 측정</b><span>{p['hop_ms']} ms 프레임의 피크 엔벌로프({p['sr']} Hz 모노). 짧은 클릭이 평균에 묻히지 않습니다.</span></div>
   <div><b>스파이크 판정</b><span>{thr_rule}</span></div>
   <div><b>그래프 2 정렬</b><span>각 파일의 첫 스파이크를 t = 0으로 두고 상대 시간으로 겹쳐 그림.</span></div>
-  <div><b>우세 간격</b><span>간격 중 ±25% 안에 가장 많이 모이는 무리의 대표값. 짧은 부가 스파이크가 섞여도
-    실제 주기가 드러납니다. 무리가 없으면 "없음".</span></div>
+  <div><b>규칙성 판정</b><span>최적 주기에서의 위상 집중도를, 같은 개수를 같은 구간에 무작위로 뿌린
+    {n_sur}번과 비교해 p값을 냅니다. p≤0.01 규칙적 · p≤0.05 약한 규칙성 · 스파이크 12개 미만이면 판단 불가.</span></div>
 </section>
 <figure>
   <div class="cap"><h2>그래프 1 — 파일별 파형</h2>
@@ -353,9 +398,35 @@ code{{font-family:"IBM Plex Mono",monospace;font-size:.92em;background:var(--chi
      자기 잡음 대비로 정규화했습니다. 아래 띠는 같은 상대 축 위의 스파이크 시각입니다.</p></div>
   <div class="imgbox"><img src="data:image/png;base64,{b64(g2)}" alt="첫 스파이크에 정렬해 겹친 엔벌로프"></div>
 </figure>
+<section class="guide"><h2>지표 읽는 법</h2>
+  <p class="note">이 리포트가 답하려는 질문은 "주기가 몇 초인가"가 아니라
+     <b>"이 녹음이 규칙적인가, 아니면 우연인가"</b>입니다. 아래 세 지표가 그 판단의 근거입니다.</p>
+  <dl>
+    <dt>CV (변동계수)</dt>
+    <dd>간격의 표준편차 ÷ 평균. 시각이 완전히 무작위(포아송)면 1 부근, 규칙적일수록 0에 가깝습니다.
+        간격만 보는 지표라 스파이크를 놓치거나 더 잡으면 흔들립니다.</dd>
+    <dt>위상 집중도 R</dt>
+    <dd>최적 주기를 찾아, 스파이크들이 그 주기의 <b>같은 위상</b>에 얼마나 모이는지를 0~1로 잰 값
+        (모든 스파이크가 정확히 같은 위상이면 1). 스파이크를 하나 놓쳐 간격이 두 배가 되어도 위상은
+        유지되므로, 검출 임계에 덜 흔들립니다.</dd>
+    <dt>필요값 / p값</dt>
+    <dd>같은 개수의 스파이크를 같은 구간에 <b>무작위로 뿌린 {n_sur}번</b>과 비교합니다.
+        '필요값'은 그 무작위 시행의 상위 5% 지점 — 관측된 R이 이 값을 넘지 못하면 우연과 구별되지 않습니다.
+        p값은 무작위 시행이 관측값 이상을 낸 비율이고, 최솟값은 1/{n_sur1}={pmin:.3f}입니다.</dd>
+    <dt>판정</dt>
+    <dd><span class="badge bok">규칙적</span> p ≤ 0.01 ·
+        <span class="badge bwarn">약한 규칙성</span> p ≤ 0.05 ·
+        <span class="badge boff">불규칙</span> 그 이상 ·
+        <span class="badge boff">판단 불가</span> 스파이크가 12개 미만이라 규칙적이어도 검출할 힘이 없는 경우.
+        '판단 불가'는 규칙적이 아니라는 뜻이 <b>아닙니다</b>.</dd>
+    <dt>우세 간격</dt>
+    <dd>간격 중 ±25% 안에 가장 많이 모이는 무리의 대표값. 참고용으로만 남겨둡니다 —
+        무작위 스파이크열에서도 10~35% 확률로 값이 나오기 때문에 규칙성의 근거로는 쓸 수 없습니다.</dd>
+  </dl>
+</section>
 <section class="find"><h2>자동 관찰</h2><ul>{notes}</ul></section>
 <section class="tablewrap"><table>
-  <thead><tr><th>파일</th><th>스파이크</th><th>임계</th><th>우세 간격(초)</th><th>간격 중앙값(초)</th><th>평균(초)</th><th>최소 / 최대(초)</th><th>변동계수</th><th>첫 스파이크</th></tr></thead>
+  <thead><tr><th>파일</th><th>스파이크</th><th>임계</th><th>규칙성 판정</th><th>p값</th><th>CV</th><th>R / 필요값</th><th>주기(초)</th><th>간격 중앙값(초)</th><th>첫 스파이크</th></tr></thead>
   <tbody>{rows}</tbody></table></section>
 <section class="cards">{cards}</section>
 <p class="note">같은 폴더에 <code>graph1_waveforms.png</code>, <code>graph2_overlay.png</code>,

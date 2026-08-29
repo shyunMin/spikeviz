@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 import argparse
+import html
+import re
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -78,8 +80,8 @@ def main() -> None:
     g2 = report.graph2(results, out / "graph2_overlay.png")
     report.write_csv(results, out / "spike_intervals.csv")
     report.write_json(results, p.to_dict(), out / "spike_report.json")
-    html = report.write_html(results, p.to_dict(), run_id, g1, g2, out / "report.html")
-    pdf = None if a.no_pdf else report.write_pdf(html, out / "report.pdf")
+    report_html = report.write_html(results, p.to_dict(), run_id, g1, g2, out / "report.html")
+    pdf = None if a.no_pdf else report.write_pdf(report_html, out / "report.pdf")
 
     latest = OUTPUT / "latest"
     if latest.is_symlink() or latest.exists():
@@ -87,19 +89,22 @@ def main() -> None:
     latest.symlink_to(out.name)
 
     w = max(len(r["name"]) for r in results)
-    print(f"\n  {'파일'.ljust(w)}  스파이크  임계   우세간격      간격중앙값  평균     최소/최대")
+    print(f"\n  {'파일'.ljust(w)}  스파이크  임계   판정      p값     CV      R(필요)     주기   간격중앙값")
     for r in results:
-        s, d = r["stats"], r["dominant"]
-        dom = f"{d['period']:6.1f}s({d['n']:>2}/{s['n']:<2})" if d and s else "         –  "
-        st = (f"{s['median']:9.1f}s {s['mean']:7.1f}s  {s['min']:.1f}/{s['max']:.1f}s") if s else "        –"
-        print(f"  {r['name'].ljust(w)}  {len(r['times']):>7}  {r['thr']:>4.0f}×  {dom}  {st}")
+        s, g = r["stats"], r["regularity"]
+        num = lambda v, f="{:6.2f}": f.format(v) if v is not None else "     –"
+        rr = f"{num(g['R'])}({num(g['r_needed'], '{:.2f}')})" if g["R"] is not None else "      –      "
+        per = f"{g['period']:6.1f}s" if g["period"] else "      –"
+        print(f"  {r['name'].ljust(w)}  {len(r['times']):>7}  {r['thr']:>4.0f}×  {g['verdict']:8}"
+              f"{num(g['p'], '{:6.3f}')} {num(g['cv'])}  {rr} {per}"
+              f"{num(s['median'], '{:9.1f}') if s else '        –'}s")
     print()
     for n in report.observations(results):
-        print("  - " + n.replace("<b>", "").replace("</b>", ""))
+        print("  - " + html.unescape(re.sub(r"<[^>]+>", "", n)))
     print(f"\n[spikeviz] 완료 → {out}")
     pdf_line = f"\n           PDF:    {pdf}" if pdf else (
         "" if a.no_pdf else "\n           PDF:    (Chrome을 찾지 못해 건너뜀)")
-    print(f"           리포트: {html}{pdf_line}")
+    print(f"           리포트: {report_html}{pdf_line}")
 
 
 if __name__ == "__main__":

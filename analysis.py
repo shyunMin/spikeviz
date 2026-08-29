@@ -96,6 +96,67 @@ def dominant_interval(intervals, tol: float = 0.25) -> dict | None:
                 lo=float(grp.min()), hi=float(grp.max()), std=float(grp.std()))
 
 
+def _vector_strength(t: np.ndarray, periods: np.ndarray) -> np.ndarray:
+    """주기 후보마다, 스파이크들이 그 주기의 같은 위상에 얼마나 모이는지(0~1)."""
+    phase = 2 * np.pi * t[:, None] / periods[None, :]
+    return np.abs(np.exp(1j * phase).mean(axis=0))
+
+
+def regularity(times, span: float, n_sur: int = 300, seed: int = 0) -> dict:
+    """규칙적인지 아닌지를 판정한다.
+
+    '주기가 얼마인가'가 아니라 '우연으로 설명되는가'를 묻는다. 최적 주기에서의
+    위상 집중도를, 같은 개수의 스파이크를 같은 구간에 무작위로 뿌린 것과 비교해
+    p값을 낸다. 스파이크를 몇 개 놓쳐도(간격이 2배가 돼도) 위상은 유지되므로
+    간격을 무리지어 보는 방식보다 검출 임계에 덜 흔들린다.
+    """
+    t = np.asarray(times, dtype=float)
+    if len(t) < 5:
+        return dict(verdict="표본 부족", n=len(t), cv=None, cv2=None,
+                    period=None, R=None, p=None, n_sur=0)
+    iv = np.diff(t)
+    cv = float(iv.std() / iv.mean())
+    cv2 = float(np.mean(2 * np.abs(np.diff(iv)) / (iv[1:] + iv[:-1]))) if len(iv) > 1 else None
+
+    med = float(np.median(iv))
+    lo, hi = max(1.0, .3 * med), min(4 * med, span / 3)
+    if hi <= lo:
+        hi = lo * 2
+    grid = np.linspace(lo, hi, 1500)
+    R = _vector_strength(t, grid)
+    k = int(np.argmax(R))
+    period, r_max = float(grid[k]), float(R[k])
+
+    # 배수 주기도 같은 위상 집중을 만든다(27초는 13.5초에서도 높게 나온다).
+    # 집중도가 거의 유지되는 가장 긴 주기를 참 주기로 본다.
+    for m in (4, 3, 2):
+        cand = period * m
+        if cand <= hi and float(_vector_strength(t, np.array([cand]))[0]) >= .9 * r_max:
+            period = cand
+            break
+
+    rng = np.random.default_rng(seed)
+    sur = np.array([_vector_strength(np.sort(rng.uniform(0, span, len(t))), grid).max()
+                    for _ in range(n_sur)])
+    pv = float((np.sum(sur >= r_max) + 1) / (n_sur + 1))
+    r_needed = float(np.percentile(sur, 95))   # 이 표본 크기에서 규칙적이라 말하려면 넘어야 하는 값
+
+    if pv <= .01:
+        verdict = "규칙적"
+    elif pv <= .05:
+        verdict = "약한 규칙성"
+    elif len(t) < 12:
+        verdict = "판단 불가"       # 스파이크가 적으면 규칙적이어도 잡아내지 못한다
+    else:
+        verdict = "불규칙"
+    periodic = verdict in ("규칙적", "약한 규칙성")
+    # 주기 격자에 비해 실제 간격이 훨씬 길면, 대부분의 주기를 건너뛴다는 뜻
+    skipped = float(med / period) if periodic else None
+    return dict(verdict=verdict, n=len(t), cv=cv, cv2=cv2,
+                period=float(period) if periodic else None,
+                R=r_max, r_needed=r_needed, p=pv, n_sur=n_sur, skip_ratio=skipped)
+
+
 def analyze(path: str, p: Params) -> dict:
     """한 파일의 분석 결과. 파형과 엔벌로프 배열까지 함께 돌려준다."""
     duration = probe_duration(path)
@@ -140,6 +201,7 @@ def analyze(path: str, p: Params) -> dict:
         times=times, abs_times=[t0 + t for t in times], ratios=ratios,
         intervals=[float(v) for v in iv],
         stats=stats(iv), stats_long=stats(long_iv), dominant=dominant_interval(iv),
+        regularity=regularity(times, len(x) / p.sr),
         anchor=anchor, abs_anchor=t0 + anchor, anchor_kind=anchor_kind,
         wave=x, env=env,
     )
