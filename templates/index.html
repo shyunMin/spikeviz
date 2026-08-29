@@ -128,6 +128,7 @@ code{font-family:"IBM Plex Mono",monospace;background:var(--chip);padding:1px 5p
       <label class="f"><span>병합 간격 <b>refractory_s</b> (초)</span><input type="number" id="refractory_s" step="0.1" min="0"></label>
       <label class="f"><span>엔벌로프 프레임 <b>hop_ms</b> (ms)</span><input type="number" id="hop_ms" step="1" min="1"></label>
       <label class="f"><span>분석 샘플레이트 <b>sr</b> (Hz)</span><input type="number" id="sr" step="1000" min="4000"></label>
+      <label class="f"><span>그래프2 기준 파일 <b>baseline</b></span><input type="text" id="baseline" placeholder="예: 260829_035407"></label>
       <label class="f"><span>[기능 2] 국소 바닥 대비 <b>k_local</b></span><input type="number" id="k_local" step="1" min="1"></label>
       <label class="f"><span>[기능 2] 최대 지속폭 <b>max_sustain_s</b> (초)</span><input type="number" id="max_sustain_s" step="0.05" min="0.02"></label>
     </div>
@@ -161,6 +162,7 @@ code{font-family:"IBM Plex Mono",monospace;background:var(--chip);padding:1px 5p
 <script>
 const $ = s => document.querySelector(s);
 const FIELDS = ["skip_s","max_s","min_keep_s","k_abs","k_rel","k_cap","refractory_s","hop_ms","sr"];
+const TEXT_FIELDS = ["baseline"];
 const LONG_FIELDS = ["k_local","max_sustain_s"];
 let defaults = {}, longDefaults = {};
 const mmss = t => `${Math.floor(t/60)}:${String(Math.floor(t%60)).padStart(2,"0")}`;
@@ -196,6 +198,7 @@ async function load(){
   const s = await (await fetch("/api/state")).json();
   defaults = s.defaults; longDefaults = s.long_defaults;
   FIELDS.forEach(k => $("#"+k).value = s.params[k] ?? defaults[k]);
+  TEXT_FIELDS.forEach(k => $("#"+k).value = s.params[k] ?? defaults[k] ?? "");
   LONG_FIELDS.forEach(k => $("#"+k).value = s.long_defaults[k]);
   renderFiles(s.files);
   renderPast(s.runs || []);
@@ -225,6 +228,7 @@ $("#reset").onclick = () => {
 $("#run").onclick = async () => {
   const params = {};
   FIELDS.forEach(k => { const v = $("#"+k).value; params[k] = v === "" ? defaults[k] : Number(v); });
+  TEXT_FIELDS.forEach(k => params[k] = $("#"+k).value.trim());
   $("#run").disabled = true;
   $("#runmsg").className = "msg";
   $("#runmsg").innerHTML = '<span class="spin"></span> 분석 중… 파일이 길면 수십 초 걸립니다.';

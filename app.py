@@ -135,7 +135,7 @@ def api_run():
     d = OUTPUT / run_id
     d.mkdir(parents=True, exist_ok=True)
     g1 = report.graph1(results, d / "graph1_waveforms.png")
-    g2 = report.graph2(results, d / "graph2_overlay.png")
+    g2 = report.graph2(results, d / "graph2_overlay.png", baseline=params.baseline)
     report.write_csv(results, d / "spike_intervals.csv")
     report.write_json(results, params.to_dict(), d / "spike_report.json")
     html_path = report.write_html(results, params.to_dict(), run_id, g1, g2, d / "report.html")

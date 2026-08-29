@@ -48,6 +48,8 @@ def main() -> None:
     ap.add_argument("--k-abs", type=float, default=d.k_abs, help="잡음 바닥 대비 최소 배율")
     ap.add_argument("--k-rel", type=float, default=d.k_rel, help="후보 p90 대비 계수")
     ap.add_argument("--k-cap", type=float, default=d.k_cap, help="임계 상한 (잡음 바닥 대비 배율)")
+    ap.add_argument("--baseline", default=d.baseline,
+                    help="그래프 2 위 패널의 기준 파일 이름 (예: 260829_035407)")
     ap.add_argument("--refractory", type=float, default=d.refractory_s, help="이 안에 붙은 피크는 병합")
     ap.add_argument("--hop-ms", type=int, default=d.hop_ms, help="엔벌로프 프레임 ms")
     ap.add_argument("--sr", type=int, default=d.sr, help="분석 샘플레이트")
@@ -70,7 +72,8 @@ def main() -> None:
         return
 
     p = Params(skip_s=a.skip, max_s=a.max, min_keep_s=a.min_keep, sr=a.sr, hop_ms=a.hop_ms,
-               k_abs=a.k_abs, k_rel=a.k_rel, k_cap=a.k_cap, refractory_s=a.refractory)
+               k_abs=a.k_abs, k_rel=a.k_rel, k_cap=a.k_cap, refractory_s=a.refractory,
+               baseline=a.baseline)
     print(f"[spikeviz] {len(files)}개 파일 분석 시작")
     results = []
     for f in files:
@@ -89,7 +92,7 @@ def main() -> None:
     out = OUTPUT / run_id
     out.mkdir(parents=True, exist_ok=True)
     g1 = report.graph1(results, out / "graph1_waveforms.png")
-    g2 = report.graph2(results, out / "graph2_overlay.png")
+    g2 = report.graph2(results, out / "graph2_overlay.png", baseline=p.baseline)
     report.write_csv(results, out / "spike_intervals.csv")
     report.write_json(results, p.to_dict(), out / "spike_report.json")
     report_html = report.write_html(results, p.to_dict(), run_id, g1, g2, out / "report.html")

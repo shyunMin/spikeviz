@@ -27,6 +27,7 @@ class Params:
     k_cap: float = 20.0         # 임계 상한. 큰 스파이크 몇 개 때문에 기준이 올라가는 것을 막는다
                                 # (수동 카운트 두 건과 대조해 정한 값)
     refractory_s: float = 1.0   # 이 안에 붙은 피크는 하나로 병합
+    baseline: str = ""          # 그래프 2 위 패널의 기준 파일 이름. 비우면 가장 오래된 '규칙적' 파일
 
     def to_dict(self):
         return asdict(self)

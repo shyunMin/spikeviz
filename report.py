@@ -93,7 +93,7 @@ code{font-family:"IBM Plex Mono",monospace;font-size:.92em;background:var(--chip
  @page{size:A4;margin:14mm 12mm} body{background:#fff;font-size:10.5px}
  .wrap{max-width:none;padding:0;gap:20px} h1{font-size:23px} h2{font-size:15px} h3{font-size:13px}
  figure,.card,.find,.guide,.tablewrap,.rule div{break-inside:avoid;box-shadow:none}
- figure img{min-width:0} .imgbox,.tablewrap{overflow:visible}
+ figure img{min-width:0;max-height:236mm;width:auto;max-width:100%;margin:0 auto} .imgbox,.tablewrap{overflow:visible}
  table{min-width:0;font-size:9.5px} th,td{padding:7px 9px}
  *{-webkit-print-color-adjust:exact;print-color-adjust:exact}
 }"""
@@ -163,54 +163,113 @@ def graph1(results: list[dict], out: Path) -> Path:
     return out
 
 
-def graph2(results: list[dict], out: Path) -> Path:
+def _series(r: dict, normalise: bool, bin_n: int = 10):
+    """기준점 이후의 엔벌로프를 표시용으로 100ms 단위 max-hold로 줄인다."""
+    k = int(round(r["anchor"] / r["dt"]))
+    e = r["env"][k:] / (r["floor"] if normalise else 1.0)
+    m = len(e) // bin_n * bin_n
+    if m == 0:
+        return None, None
+    e = e[:m].reshape(-1, bin_n).max(1)
+    return np.arange(len(e)) * r["dt"] * bin_n, e
+
+
+def _spike_marks(r: dict, normalise: bool, lift: float = 1.45):
+    """검출된 스파이크의 (기준점 대비 시각, 표시 높이). 하나도 빠뜨리지 않는다.
+
+    봉우리 끝에 정확히 겹치면 선에 묻히므로 조금 위에 찍는다.
+    """
+    scale = 1.0 if normalise else r["floor"]
+    xs = [t - r["anchor"] for t in r["times"]]
+    ys = [ratio * scale * lift for ratio in r["ratios"]]
+    return xs, ys
+
+
+def graph2(results: list[dict], out: Path, baseline: str | None = None) -> Path:
     n = len(results)
-    h = 5.6 + .45 * n
+    # 위 패널: 정규화하지 않은 원래 크기 비교 — 기준 파일과 최신 2개만
+    names = [r["name"] for r in results]
+    base_i = names.index(baseline) if baseline in names else None
+    if base_i is None:                       # 기준을 안 주면 가장 오래된 '규칙적' 파일
+        reg = [i for i, r in enumerate(results)
+               if r["regularity"]["verdict"] in ("규칙적", "약한 규칙성")]
+        base_i = reg[0] if reg else 0
+    raw_idx = sorted({base_i, *range(max(0, n - 2), n)})
+
+    h = 7.6 + .40 * n
     fig = plt.figure(figsize=(13, h), facecolor=SURF)
-    lab = .055 + .006 * max(len(r["name"]) for r in results)   # 이름표가 길면 왼쪽을 더 준다
-    gs = fig.add_gridspec(2, 1, height_ratios=[3.2, max(.8, .28 * n)], hspace=.16,
-                          top=1 - 1.15 / h, bottom=.62 / h, left=min(lab, .16), right=.985)
-    ax, axr = fig.add_subplot(gs[0]), fig.add_subplot(gs[1])
-    span, ymax = 0.0, 10.0
+    lab = .055 + .006 * max(len(r["name"]) for r in results)
+    gs = fig.add_gridspec(3, 1, height_ratios=[2.0, 3.0, max(.8, .26 * n)], hspace=.34,
+                          top=1 - 1.2 / h, bottom=.62 / h, left=min(lab, .16), right=.985)
+    axr_, ax, axr = fig.add_subplot(gs[0]), fig.add_subplot(gs[1]), fig.add_subplot(gs[2])
+    span = 0.0
+
+    # --- 패널 1: 원래 크기 (정규화 없음) ---
+    ymin_raw, ymax_raw = 1.0, 0.0
+    for i in raw_idx:
+        r = results[i]
+        c = color_of(i, n)
+        tr, e = _series(r, normalise=False)
+        if tr is None:
+            continue
+        span = max(span, tr[-1])
+        ymax_raw = max(ymax_raw, e.max() * 2.2)
+        ymin_raw = min(ymin_raw, r["floor"] * .6)
+        axr_.plot(tr, e, color=c, lw=1.0, alpha=.85,
+                  label=f"{r['name']}" + ("  (baseline)" if i == base_i else ""))
+        xs, ys = _spike_marks(r, normalise=False)
+        axr_.plot(xs, ys, "v", ms=5.5, color=c, mec=SURF, mew=.5, alpha=.95)
+    axr_.set_yscale("log")
+    axr_.set_ylim(max(ymin_raw, 1e-5), max(ymax_raw, 1e-4))
+    axr_.set_ylabel("peak amplitude (not normalised)", fontsize=9, color=INK2)
+    axr_.tick_params(labelbottom=False)
+    axr_.legend(frameon=False, fontsize=8.8, labelcolor=INK2, ncols=3, loc="lower left",
+                bbox_to_anchor=(0, 1.005, 1, .08), mode="expand", borderaxespad=0, handlelength=1.6)
+    axr_.set_title("", loc="left")
+
+    # --- 패널 2: 자기 잡음 대비 정규화 (전체 파일) ---
+    ymax = 10.0
     for i, r in enumerate(results):
         c = color_of(i, n)
-        k = int(round(r["anchor"] / r["dt"]))
-        e = r["env"][k:] / r["floor"]
-        g = 10
-        m = len(e) // g * g
-        if m == 0:
+        tr, e = _series(r, normalise=True)
+        if tr is None:
             continue
-        e = e[:m].reshape(-1, g).max(1)
-        tr = np.arange(len(e)) * r["dt"] * g
-        span, ymax = max(span, tr[-1]), max(ymax, e.max() * 1.25)
-        ax.fill_between(tr, 1, e, color=c, lw=0, alpha=.22)
+        span, ymax = max(span, tr[-1]), max(ymax, e.max() * 2.0)
+        ax.fill_between(tr, 1, e, color=c, lw=0, alpha=.18)
         kind = "first spike" if r["anchor_kind"] == "first_spike" else "max amplitude, no spike"
-        ax.plot(tr, e, color=c, lw=1.0, alpha=.85,
-                label=f"{r['name']}  ({kind} @ {mmss(r['abs_anchor'])})")
-    for i, r in enumerate(results):
-        c, y = color_of(i, n), n - 1 - i
-        sp = [t - r["anchor"] for t in r["times"] if t >= r["anchor"]]
-        axr.plot([0, r["t1"] - r["t0"] - r["anchor"]], [y, y], color=c, lw=.8, alpha=.28)
-        axr.plot(sp, [y] * len(sp), "|", ms=13, mew=2, color=c)
-        axr.text(-span * .006, y, r["name"], ha="right", va="center", fontsize=8.5, color=INK2)
-    for a in (ax, axr):
-        _strip(a)
-        a.set_xlim(0, span or 1)
+        ax.plot(tr, e, color=c, lw=.9, alpha=.8,
+                label=f"{r['name']}  ({kind} @ {mmss(r['abs_anchor'])}, {len(r['times'])} spikes)")
+        xs, ys = _spike_marks(r, normalise=True)
+        ax.plot(xs, ys, "v", ms=4.5, color=c, mec=SURF, mew=.4, alpha=.95)
     ax.set_yscale("log")
     ax.set_ylim(1, ymax)
     ax.set_yticks([1, 10, 100])
     ax.set_yticklabels(["1x", "10x", "100x"])
     ax.set_ylabel("peak envelope / own noise floor", fontsize=9, color=INK2)
     ax.tick_params(labelbottom=False)
-    ax.legend(frameon=False, fontsize=8.8, labelcolor=INK2, ncols=min(4, max(1, n)),
-              loc="lower left", bbox_to_anchor=(0, 1.005, 1, .08), mode="expand",
+    ax.legend(frameon=False, fontsize=8.2, labelcolor=INK2, ncols=min(3, max(1, n)),
+              loc="lower left", bbox_to_anchor=(0, 1.005, 1, .1), mode="expand",
               borderaxespad=0, handlelength=1.6, columnspacing=1.2)
+
+    # --- 패널 3: 스파이크 시각 ---
+    for i, r in enumerate(results):
+        c, y = color_of(i, n), n - 1 - i
+        sp = [t - r["anchor"] for t in r["times"]]
+        axr.plot([0, r["t1"] - r["t0"] - r["anchor"]], [y, y], color=c, lw=.8, alpha=.28)
+        axr.plot(sp, [y] * len(sp), "|", ms=13, mew=2, color=c)
+        axr.text(-span * .006, y, f"{r['name']} ({len(sp)})", ha="right", va="center",
+                 fontsize=8.5, color=INK2)
+    for a in (axr_, ax, axr):
+        _strip(a)
+        a.set_xlim(0, span or 1)
     axr.set_yticks([])
     axr.set_ylim(-.6, n - .4)
     axr.set_xlabel("time relative to each file's first spike (s)", fontsize=9, color=INK2)
-    axr.set_title("spike times, same relative axis", loc="left", fontsize=9.5, color=INK2, pad=4)
-    fig.suptitle("Graph 2  -  All recordings overlaid, aligned on their first spike (t = 0)",
-                 x=min(lab, .16), ha="left", fontsize=14, color=INK, y=1 - .32 / h)
+    axr.set_title("spike times, same relative axis (all detected spikes)",
+                  loc="left", fontsize=9.5, color=INK2, pad=4)
+    fig.suptitle("Graph 2  -  aligned on each file's first spike (t = 0).  "
+                 "top: raw size, baseline vs 2 newest   ·   middle: normalised, all files",
+                 x=min(lab, .16), ha="left", fontsize=13, color=INK, y=1 - .35 / h)
     fig.savefig(out, dpi=150, facecolor=SURF)
     plt.close(fig)
     return out
@@ -407,8 +466,11 @@ def write_html(results: list[dict], params: dict, run_id: str, g1: Path, g2: Pat
 </figure>
 <figure>
   <div class="cap"><h2>그래프 2 — 첫 스파이크 기준 겹쳐 보기</h2>
-  <p>세로축은 각 파일의 잡음 바닥 대비 배율(로그). 녹음 레벨 차이가 커서 진폭 그대로 겹치면 작은 파일이 묻히므로
-     자기 잡음 대비로 정규화했습니다. 아래 띠는 같은 상대 축 위의 스파이크 시각입니다.</p></div>
+  <p>세 칸 모두 각 파일의 첫 스파이크를 t = 0에 맞춘 상대 시간축입니다.
+     <b>위</b>: 정규화하지 않은 원래 크기 — 기준 파일과 최신 2개만 겹쳤습니다.
+     <b>가운데</b>: 자기 잡음 바닥 대비 배율(로그)로 정규화한 전 파일 비교. 녹음 레벨 차이가 커서
+     진폭 그대로 겹치면 작은 파일이 묻히기 때문입니다.
+     두 칸 모두 <b>▼ 가 검출된 스파이크 전부</b>입니다. <b>아래</b>: 같은 축 위의 스파이크 시각.</p></div>
   <div class="imgbox"><img src="data:image/png;base64,{b64(g2)}" alt="첫 스파이크에 정렬해 겹친 엔벌로프"></div>
 </figure>
 <section class="guide"><h2>지표 읽는 법</h2>
