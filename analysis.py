@@ -152,7 +152,10 @@ def regularity(times, span: float, n_sur: int = 300, seed: int = 0) -> dict:
     cv2 = float(np.mean(2 * np.abs(np.diff(iv)) / (iv[1:] + iv[:-1]))) if len(iv) > 1 else None
 
     med = float(np.median(iv))
-    lo, hi = max(1.0, .3 * med), min(4 * med, span / 3)
+    # 스파이크가 뭉쳐 나면 간격 중앙값이 실제 주기보다 훨씬 짧다.
+    # 긴 간격(95퍼센타일)까지 담아야 격자 주기를 놓치지 않는다.
+    lo = max(1.0, .3 * med)
+    hi = min(span / 3, max(4 * med, 1.5 * float(np.percentile(iv, 95))))
     if hi <= lo:
         hi = lo * 2
     grid = np.linspace(lo, hi, 1500)
@@ -163,9 +166,13 @@ def regularity(times, span: float, n_sur: int = 300, seed: int = 0) -> dict:
     # 배수 주기도 같은 위상 집중을 만든다(27초는 13.5초에서도 높게 나온다).
     # 집중도가 거의 유지되는 가장 긴 주기를 참 주기로 본다.
     for m in (4, 3, 2):
-        cand = period * m
-        if cand <= hi and float(_vector_strength(t, np.array([cand]))[0]) >= .9 * r_max:
-            period = cand
+        near = np.linspace(period * m * .94, period * m * 1.06, 60)
+        near = near[near <= hi]
+        if not len(near):
+            continue
+        v = _vector_strength(t, near)
+        if float(v.max()) >= .9 * r_max:
+            period = float(near[int(np.argmax(v))])
             break
 
     rng = np.random.default_rng(seed)
