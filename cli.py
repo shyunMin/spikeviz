@@ -91,7 +91,7 @@ def main() -> None:
     run_id = "run_" + datetime.now().strftime("%Y%m%d_%H%M%S")
     out = OUTPUT / run_id
     out.mkdir(parents=True, exist_ok=True)
-    g1 = report.graph1(results, out / "graph1_waveforms.png")
+    g1 = report.graph1(results, out / "graph1_waveforms.png", baseline=p.baseline)
     g2 = report.graph2(results, out / "graph2_overlay.png", baseline=p.baseline)
     report.write_csv(results, out / "spike_intervals.csv")
     report.write_json(results, p.to_dict(), out / "spike_report.json")
@@ -115,7 +115,7 @@ def main() -> None:
               f"{num(g['p'], '{:6.3f}')} {num(g['cv'])}  {rr} {per}"
               f"{num(s['median'], '{:9.1f}') if s else '        –'}s")
     print()
-    for n in report.observations(results):
+    for n in report.observations(results, p.baseline):
         print("  - " + html.unescape(re.sub(r"<[^>]+>", "", n)))
     print(f"\n[spikeviz] 완료 → {out}")
     pdf_line = f"\n           PDF:    {pdf}" if pdf else (

@@ -103,14 +103,23 @@ code{font-family:"IBM Plex Mono",monospace;font-size:.92em;background:var(--chip
 CHROME = ("google-chrome", "google-chrome-stable", "chromium", "chromium-browser", "chrome")
 
 
-def color_of(i: int, n: int | None = None) -> str:
-    """색은 최신 8개에만 준다. 그보다 오래된 파일은 회색(이름표로 구분).
+BEFORE_C, AFTER_C = "#8a8985", "#e34948"   # 기준 시점 이전 / 이후
 
-    n(전체 개수)을 주면 뒤에서부터 8개가 색을 받는다. 파일 목록이 이름순 =
-    시간순이므로 목록의 끝이 최신이다.
-    """
-    j = i if n is None else i - max(0, n - len(SLOTS))
-    return SLOTS[j] if 0 <= j < len(SLOTS) else EXTRA
+
+def pick_baseline(results: list[dict], baseline: str | None) -> str:
+    """기준 파일 이름. 지정이 없으면 가장 오래된 '규칙적' 파일."""
+    names = [r["name"] for r in results]
+    if baseline in names:
+        return baseline
+    reg = [r["name"] for r in results
+           if r["regularity"]["verdict"] in ("규칙적", "약한 규칙성")]
+    return reg[0] if reg else names[0]
+
+
+def colors_for(results: list[dict], baseline: str | None = None) -> list[str]:
+    """기준 파일보다 앞선 녹음은 회색, 기준 파일부터는 빨강. 이름이 곧 시간순이다."""
+    cut = pick_baseline(results, baseline)
+    return [AFTER_C if r["name"] >= cut else BEFORE_C for r in results]
 
 
 def mmss(t: float) -> str:
@@ -134,37 +143,46 @@ def _strip(ax):
     ax.tick_params(colors=INK2, labelsize=8.5, length=3)
 
 
-def graph1(results: list[dict], out: Path) -> Path:
-    n = len(results)
-    h = 1.1 + 2.5 * n
-    fig, axes = plt.subplots(n, 1, figsize=(13, h), facecolor=SURF, squeeze=False)
-    axes = axes[:, 0]
-    fig.subplots_adjust(hspace=.55, top=1 - .78 / h, bottom=.7 / h, left=.085, right=.98)
+def graph1(results: list[dict], out: Path, baseline: str | None = None,
+           per_page: int = 8) -> list[Path]:
+    """파일별 파형. 한 장에 최대 per_page개씩 잘라 여러 장으로 만든다."""
+    cols = colors_for(results, baseline)
+    pages = [(results[i:i + per_page], cols[i:i + per_page], i)
+             for i in range(0, len(results), per_page)]
     fmt = FuncFormatter(lambda v, _: mmss(v))
-    for ax, r, i in zip(axes, results, range(n)):
-        c = color_of(i, n)
-        tt, mn, mx = _minmax(r["wave"], r["sr"])
-        tt = tt + r["t0"]
-        _strip(ax)
-        ax.fill_between(tt, mn, mx, color=c, lw=0, alpha=.9)
-        lim = max(abs(mn).max(), mx.max(), 1e-6) * 1.35
-        for t in r["abs_times"]:
-            ax.plot(t, lim * .86, marker="v", ms=6, color=INK, mec="none", clip_on=False)
-        ax.set_ylim(-lim, lim)
-        ax.set_xlim(r["t0"], r["t1"])
-        ax.xaxis.set_major_formatter(fmt)
-        how = ("MANUAL count" if r.get("source") == "manual"
-               else f"threshold {r['thr']:.0f}x noise floor")
-        ax.set_title(f"{r['filename']}   |   analysed {mmss(r['t0'])}-{mmss(r['t1'])}"
-                     f"   |   {how}   |   {len(r['times'])} spikes (v)",
-                     loc="left", fontsize=10.5, color=INK, pad=7)
-        ax.set_ylabel("amplitude", fontsize=8.5, color=INK2)
-    axes[-1].set_xlabel("time in file (m:ss)", fontsize=9, color=INK2)
-    fig.suptitle("Graph 1  -  Waveform per recording", x=.085, ha="left", fontsize=14, color=INK,
-                 y=1 - .3 / h)
-    fig.savefig(out, dpi=150, facecolor=SURF)
-    plt.close(fig)
-    return out
+    out_paths = []
+    for pno, (chunk, ccs, off) in enumerate(pages, 1):
+        n = len(chunk)
+        h = 1.1 + 2.5 * n
+        fig, axes = plt.subplots(n, 1, figsize=(13, h), facecolor=SURF, squeeze=False)
+        axes = axes[:, 0]
+        fig.subplots_adjust(hspace=.55, top=1 - .78 / h, bottom=.7 / h, left=.085, right=.98)
+        for ax, r, c in zip(axes, chunk, ccs):
+            tt, mn, mx = _minmax(r["wave"], r["sr"])
+            tt = tt + r["t0"]
+            _strip(ax)
+            ax.fill_between(tt, mn, mx, color=c, lw=0, alpha=.9)
+            lim = max(abs(mn).max(), mx.max(), 1e-6) * 1.35
+            for t in r["abs_times"]:
+                ax.plot(t, lim * .86, marker="v", ms=6, color=INK, mec="none", clip_on=False)
+            ax.set_ylim(-lim, lim)
+            ax.set_xlim(r["t0"], r["t1"])
+            ax.xaxis.set_major_formatter(fmt)
+            how = ("MANUAL count" if r.get("source") == "manual"
+                   else f"threshold {r['thr']:.0f}x noise floor")
+            ax.set_title(f"{r['filename']}   |   analysed {mmss(r['t0'])}-{mmss(r['t1'])}"
+                         f"   |   {how}   |   {len(r['times'])} spikes (v)",
+                         loc="left", fontsize=10.5, color=INK, pad=7)
+            ax.set_ylabel("amplitude", fontsize=8.5, color=INK2)
+        axes[-1].set_xlabel("time in file (m:ss)", fontsize=9, color=INK2)
+        part = f"  ({pno}/{len(pages)}: files {off + 1}-{off + n} of {len(results)})" if len(pages) > 1 else ""
+        fig.suptitle(f"Graph 1  -  Waveform per recording{part}",
+                     x=.085, ha="left", fontsize=14, color=INK, y=1 - .3 / h)
+        path = out if len(pages) == 1 else out.with_name(f"{out.stem}_{pno}{out.suffix}")
+        fig.savefig(path, dpi=150, facecolor=SURF)
+        plt.close(fig)
+        out_paths.append(path)
+    return out_paths
 
 
 def _series(r: dict, normalise: bool, bin_n: int = 10):
@@ -191,14 +209,11 @@ def _spike_marks(r: dict, normalise: bool, lift: float = 1.45):
 
 def graph2(results: list[dict], out: Path, baseline: str | None = None) -> Path:
     n = len(results)
-    # 위 패널: 정규화하지 않은 원래 크기 비교 — 기준 파일과 최신 2개만
+    cols = colors_for(results, baseline)
     names = [r["name"] for r in results]
-    base_i = names.index(baseline) if baseline in names else None
-    if base_i is None:                       # 기준을 안 주면 가장 오래된 '규칙적' 파일
-        reg = [i for i, r in enumerate(results)
-               if r["regularity"]["verdict"] in ("규칙적", "약한 규칙성")]
-        base_i = reg[0] if reg else 0
-    raw_idx = sorted({base_i, *range(max(0, n - 2), n)})
+    base_i = names.index(pick_baseline(results, baseline))
+    # 위 패널: 정규화하지 않은 원래 크기 비교 — 기준 파일과 최신 1개만
+    raw_idx = sorted({base_i, n - 1})
 
     h = 7.6 + .40 * n
     fig = plt.figure(figsize=(13, h), facecolor=SURF)
@@ -212,7 +227,7 @@ def graph2(results: list[dict], out: Path, baseline: str | None = None) -> Path:
     ymin_raw, ymax_raw = 1.0, 0.0
     for i in raw_idx:
         r = results[i]
-        c = color_of(i, n)
+        c = cols[i]
         tr, e = _series(r, normalise=False)
         if tr is None:
             continue
@@ -226,16 +241,15 @@ def graph2(results: list[dict], out: Path, baseline: str | None = None) -> Path:
         axr_.plot(xs, ys, "v", ms=5.5, color=c, mec=SURF, mew=.5, alpha=.95)
     axr_.set_yscale("log")
     axr_.set_ylim(max(ymin_raw, 1e-5), max(ymax_raw, 1e-4))
-    axr_.set_ylabel("peak amplitude (not normalised)", fontsize=9, color=INK2)
     axr_.tick_params(labelbottom=False)
-    axr_.legend(frameon=False, fontsize=8.8, labelcolor=INK2, ncols=3, loc="lower left",
+    axr_.legend(frameon=False, fontsize=8.8, labelcolor=INK2, ncols=2, loc="lower left",
                 bbox_to_anchor=(0, 1.005, 1, .08), mode="expand", borderaxespad=0, handlelength=1.6)
     axr_.set_title("", loc="left")
 
     # --- 패널 2: 자기 잡음 대비 정규화 (전체 파일) ---
     ymax = 10.0
     for i, r in enumerate(results):
-        c = color_of(i, n)
+        c = cols[i]
         tr, e = _series(r, normalise=True)
         if tr is None:
             continue
@@ -259,7 +273,7 @@ def graph2(results: list[dict], out: Path, baseline: str | None = None) -> Path:
 
     # --- 패널 3: 스파이크 시각 ---
     for i, r in enumerate(results):
-        c, y = color_of(i, n), n - 1 - i
+        c, y = cols[i], n - 1 - i
         sp = [t - r["anchor"] for t in r["times"]]
         axr.plot([0, r["t1"] - r["t0"] - r["anchor"]], [y, y], color=c, lw=.8, alpha=.28)
         axr.plot(sp, [y] * len(sp), "|", ms=13, mew=2, color=c)
@@ -273,9 +287,10 @@ def graph2(results: list[dict], out: Path, baseline: str | None = None) -> Path:
     axr.set_xlabel("time relative to each file's first spike (s)", fontsize=9, color=INK2)
     axr.set_title("spike times, same relative axis (all detected spikes)",
                   loc="left", fontsize=9.5, color=INK2, pad=4)
-    fig.suptitle("Graph 2  -  aligned on each file's first spike (t = 0).  "
-                 "top: raw size, baseline vs 2 newest   ·   middle: normalised, all files",
-                 x=min(lab, .16), ha="left", fontsize=13, color=INK, y=1 - .35 / h)
+    fig.suptitle("Graph 2  -  aligned on each file's first spike (t = 0)   ·   "
+                 "grey = before baseline, red = baseline onward",
+                 x=min(lab, .16), ha="left", fontsize=13.5, color=INK, y=1 - .32 / h)
+    axr_.set_ylabel("peak amplitude\n(raw, baseline vs newest)", fontsize=9, color=INK2)
     fig.savefig(out, dpi=150, facecolor=SURF)
     plt.close(fig)
     return out
@@ -313,7 +328,7 @@ def _period_groups(results: list[dict], tol: float = .15) -> list[list[dict]]:
     return groups
 
 
-def observations(results: list[dict]) -> list[str]:
+def observations(results: list[dict], baseline: str | None = None) -> list[str]:
     """데이터에서 바로 계산되는 관찰만 만든다."""
     notes = []
     by = lambda v: [r for r in results if r["regularity"]["verdict"] == v]
@@ -379,11 +394,11 @@ def observations(results: list[dict]) -> list[str]:
         notes.append("<b>구간이 다른 파일이 섞여 있습니다.</b> " + name(whole) +
                      "은(는) 길이가 짧아 앞부분을 자르지 않고 전체를 썼습니다. 다른 파일에서 잘라낸 "
                      "구간이 여기에는 포함되므로 직접 비교할 때 주의해야 합니다.")
-    if len(results) > len(SLOTS):
-        old = results[:len(results) - len(SLOTS)]
-        notes.append(f"<b>색은 최신 {len(SLOTS)}개에만 줬습니다.</b> 총 {len(results)}개라 그보다 오래된 "
-                     f"{len(old)}개(" + ", ".join(html.escape(r["name"]) for r in old) +
-                     ")는 그래프에서 회색으로 그립니다. 이름표로 구분하세요.")
+    base = pick_baseline(results, baseline)
+    before = [r for r in results if r["name"] < base]
+    notes.append(f"<b>색은 기준 파일 {html.escape(base)}을 경계로 둘로 나눴습니다.</b> "
+                 f"그 이전 {len(before)}개는 회색, 기준 파일부터 {len(results) - len(before)}개는 "
+                 f"빨강입니다. 개별 파일 구분은 이름표로 하세요.")
     return notes
 
 
@@ -434,8 +449,11 @@ def _card(r: dict, c: str) -> str:
 </article>'''
 
 
-def write_html(results: list[dict], params: dict, run_id: str, g1: Path, g2: Path, out: Path) -> Path:
+def write_html(results: list[dict], params: dict, run_id: str, g1, g2: Path, out: Path) -> Path:
     b64 = lambda p: base64.b64encode(p.read_bytes()).decode()
+    g1_list = list(g1) if isinstance(g1, (list, tuple)) else [g1]
+    baseline = params.get("baseline") or None
+    cols = colors_for(results, baseline)
     rows = ""
     for i, r in enumerate(results):
         s = r["stats"]
@@ -449,11 +467,14 @@ def write_html(results: list[dict], params: dict, run_id: str, g1: Path, g2: Pat
                  f'<td>{num(s["median"], "{:.1f}") if s else "–"}</td>')
         how = ('<span class="badge bman">수동</span>' if r.get("source") == "manual"
                else f'{r["thr"]:.0f}×')
-        rows += (f'<tr><td><span class="dot" style="background:{color_of(i, len(results))}"></span>'
+        rows += (f'<tr><td><span class="dot" style="background:{cols[i]}"></span>'
                  f'{html.escape(r["name"])}</td><td>{len(r["times"])}</td><td>{how}</td>'
                  f'{cells}<td>{mmss(r["abs_anchor"])}</td></tr>')
-    cards = "\n".join(_card(r, color_of(i, len(results))) for i, r in enumerate(results))
-    notes = "".join(f"<li>{t}</li>" for t in observations(results)) or "<li>관찰할 항목이 없습니다.</li>"
+    cards = "\n".join(_card(r, cols[i]) for i, r in enumerate(results))
+    notes = "".join(f"<li>{t}</li>" for t in observations(results, baseline)) or "<li>관찰할 항목이 없습니다.</li>"
+    g1_imgs = "\n  ".join(
+        f'<div class="imgbox"><img src="data:image/png;base64,{b64(g)}" alt="파일별 파형과 스파이크 표시"></div>'
+        for g in g1_list)
     p = params
     n_sur = next((r["regularity"]["n_sur"] for r in results if r["regularity"]["n_sur"]), 300)
     n_sur1, pmin = n_sur + 1, 1 / (n_sur + 1)
@@ -488,16 +509,18 @@ def write_html(results: list[dict], params: dict, run_id: str, g1: Path, g2: Pat
 </section>
 <figure>
   <div class="cap"><h2>그래프 1 — 파일별 파형</h2>
-  <p>가로축은 파일 내 시간(m:ss), 세로축은 진폭. 검은 ▼ 가 검출된 스파이크입니다. 세로 눈금은 파일마다 다릅니다.</p></div>
-  <div class="imgbox"><img src="data:image/png;base64,{b64(g1)}" alt="파일별 파형과 스파이크 표시"></div>
+  <p>가로축은 파일 내 시간(m:ss), 세로축은 진폭. 검은 ▼ 가 검출된 스파이크입니다. 세로 눈금은 파일마다 다릅니다.
+     한 장에 최대 8개씩 나눠 그렸습니다. <b>회색은 기준 파일 이전, 빨강은 기준 파일부터</b>입니다.</p></div>
+  {g1_imgs}
 </figure>
 <figure>
   <div class="cap"><h2>그래프 2 — 첫 스파이크 기준 겹쳐 보기</h2>
   <p>세 칸 모두 각 파일의 첫 스파이크를 t = 0에 맞춘 상대 시간축입니다.
-     <b>위</b>: 정규화하지 않은 원래 크기 — 기준 파일과 최신 2개만 겹쳤습니다.
+     <b>위</b>: 정규화하지 않은 원래 크기 — 기준 파일과 최신 1개만 겹쳤습니다.
      <b>가운데</b>: 자기 잡음 바닥 대비 배율(로그)로 정규화한 전 파일 비교. 녹음 레벨 차이가 커서
      진폭 그대로 겹치면 작은 파일이 묻히기 때문입니다.
-     두 칸 모두 <b>▼ 가 검출된 스파이크 전부</b>입니다. <b>아래</b>: 같은 축 위의 스파이크 시각.</p></div>
+     두 칸 모두 <b>▼ 가 검출된 스파이크 전부</b>입니다. <b>아래</b>: 같은 축 위의 스파이크 시각.
+     색은 <b>회색 = 기준 파일 이전, 빨강 = 기준 파일부터</b>입니다.</p></div>
   <div class="imgbox"><img src="data:image/png;base64,{b64(g2)}" alt="첫 스파이크에 정렬해 겹친 엔벌로프"></div>
 </figure>
 <section class="guide"><h2>지표 읽는 법</h2>
@@ -531,7 +554,7 @@ def write_html(results: list[dict], params: dict, run_id: str, g1: Path, g2: Pat
   <thead><tr><th>파일</th><th>스파이크</th><th>임계</th><th>규칙성 판정</th><th>p값</th><th>CV</th><th>R / 필요값</th><th>주기(초)</th><th>간격 중앙값(초)</th><th>첫 스파이크</th></tr></thead>
   <tbody>{rows}</tbody></table></section>
 <section class="cards">{cards}</section>
-<p class="note">같은 폴더에 <code>graph1_waveforms.png</code>, <code>graph2_overlay.png</code>,
+<p class="note">같은 폴더에 <code>graph1_waveforms*.png</code>, <code>graph2_overlay.png</code>,
  <code>spike_intervals.csv</code>, <code>spike_report.json</code>, <code>report.pdf</code> 가 함께 있습니다.</p>
 </div>'''
     out.write_text(page)

@@ -134,7 +134,7 @@ def api_run():
     run_id = "run_" + datetime.now().strftime("%Y%m%d_%H%M%S")
     d = OUTPUT / run_id
     d.mkdir(parents=True, exist_ok=True)
-    g1 = report.graph1(results, d / "graph1_waveforms.png")
+    g1 = report.graph1(results, d / "graph1_waveforms.png", baseline=params.baseline)
     g2 = report.graph2(results, d / "graph2_overlay.png", baseline=params.baseline)
     report.write_csv(results, d / "spike_intervals.csv")
     report.write_json(results, params.to_dict(), d / "spike_report.json")
@@ -146,14 +146,15 @@ def api_run():
         latest.unlink()
     latest.symlink_to(d.name)
 
-    summary = [{"name": r["name"], "filename": r["filename"], "color": report.color_of(i, len(results)),
+    cols = report.colors_for(results, params.baseline)
+    summary = [{"name": r["name"], "filename": r["filename"], "color": cols[i],
                 "window": [r["t0"], r["t1"]], "thr": r["thr"], "max_ratio": r["max_ratio"],
                 "spikes": len(r["times"]), "anchor": r["abs_anchor"], "source": r["source"],
                 "stats": r["stats"], "dominant": r["dominant"], "regularity": r["regularity"],
                 "intervals": [round(v, 2) for v in r["intervals"]]}
                for i, r in enumerate(results)]
     return jsonify(run_id=run_id, dir=str(d), files=summary, failed=failed,
-                   pdf=bool(pdf), notes=report.observations(results))
+                   pdf=bool(pdf), notes=report.observations(results, params.baseline))
 
 
 @app.post("/api/run_long")
