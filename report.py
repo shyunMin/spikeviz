@@ -116,10 +116,31 @@ def pick_baseline(results: list[dict], baseline: str | None) -> str:
     return reg[0] if reg else names[0]
 
 
+def _date_of(name: str) -> str:
+    """파일 이름 앞 6자리(YYMMDD)를 날짜로 본다. 형식이 다르면 이름 전체를 한 묶음으로."""
+    return name[:6] if name[:6].isdigit() else name
+
+
 def colors_for(results: list[dict], baseline: str | None = None) -> list[str]:
-    """기준 파일보다 앞선 녹음은 회색, 기준 파일부터는 빨강. 이름이 곧 시간순이다."""
+    """기준 파일보다 앞선 녹음은 회색, 기준 파일부터는 날짜별로 색을 나눈다."""
     cut = pick_baseline(results, baseline)
-    return [AFTER_C if r["name"] >= cut else BEFORE_C for r in results]
+    dates = sorted({_date_of(r["name"]) for r in results if r["name"] >= cut})
+    dmap = {d: SLOTS[i] for i, d in enumerate(dates[-len(SLOTS):])}   # 최신 8개 날짜에만 색
+    return [dmap.get(_date_of(r["name"]), BEFORE_C) if r["name"] >= cut else BEFORE_C
+            for r in results]
+
+
+def date_legend(results: list[dict], baseline: str | None = None) -> list[tuple[str, str, int]]:
+    """(날짜, 색, 파일 수) 목록. 회색으로 남는 것은 제외."""
+    cols = colors_for(results, baseline)
+    out: dict[str, list] = {}
+    for r, c in zip(results, cols):
+        if c == BEFORE_C:
+            continue
+        d = _date_of(r["name"])
+        out.setdefault(d, [c, 0])
+        out[d][1] += 1
+    return [(d, v[0], v[1]) for d, v in sorted(out.items())]
 
 
 def mmss(t: float) -> str:
@@ -288,7 +309,7 @@ def graph2(results: list[dict], out: Path, baseline: str | None = None) -> Path:
     axr.set_title("spike times, same relative axis (all detected spikes)",
                   loc="left", fontsize=9.5, color=INK2, pad=4)
     fig.suptitle("Graph 2  -  aligned on each file's first spike (t = 0)   ·   "
-                 "grey = before baseline, red = baseline onward",
+                 "grey = before baseline, colour = by date",
                  x=min(lab, .16), ha="left", fontsize=13.5, color=INK, y=1 - .32 / h)
     axr_.set_ylabel("peak amplitude\n(raw, baseline vs newest)", fontsize=9, color=INK2)
     fig.savefig(out, dpi=150, facecolor=SURF)
@@ -396,9 +417,11 @@ def observations(results: list[dict], baseline: str | None = None) -> list[str]:
                      "구간이 여기에는 포함되므로 직접 비교할 때 주의해야 합니다.")
     base = pick_baseline(results, baseline)
     before = [r for r in results if r["name"] < base]
-    notes.append(f"<b>색은 기준 파일 {html.escape(base)}을 경계로 둘로 나눴습니다.</b> "
-                 f"그 이전 {len(before)}개는 회색, 기준 파일부터 {len(results) - len(before)}개는 "
-                 f"빨강입니다. 개별 파일 구분은 이름표로 하세요.")
+    legend = date_legend(results, baseline)
+    notes.append(f"<b>색은 기준 파일 {html.escape(base)} 이전은 회색({len(before)}개), "
+                 f"이후는 날짜별로 나눴습니다.</b> " +
+                 " · ".join(f"{d} {cnt}개" for d, _, cnt in legend) +
+                 ". 같은 날 녹음은 같은 색이고, 개별 파일 구분은 이름표로 하세요.")
     return notes
 
 
@@ -510,7 +533,7 @@ def write_html(results: list[dict], params: dict, run_id: str, g1, g2: Path, out
 <figure>
   <div class="cap"><h2>그래프 1 — 파일별 파형</h2>
   <p>가로축은 파일 내 시간(m:ss), 세로축은 진폭. 검은 ▼ 가 검출된 스파이크입니다. 세로 눈금은 파일마다 다릅니다.
-     한 장에 최대 8개씩 나눠 그렸습니다. <b>회색은 기준 파일 이전, 빨강은 기준 파일부터</b>입니다.</p></div>
+     한 장에 최대 8개씩 나눠 그렸습니다. <b>회색은 기준 파일 이전, 그 이후는 날짜별 색</b>입니다.</p></div>
   {g1_imgs}
 </figure>
 <figure>
@@ -520,7 +543,7 @@ def write_html(results: list[dict], params: dict, run_id: str, g1, g2: Path, out
      <b>가운데</b>: 자기 잡음 바닥 대비 배율(로그)로 정규화한 전 파일 비교. 녹음 레벨 차이가 커서
      진폭 그대로 겹치면 작은 파일이 묻히기 때문입니다.
      두 칸 모두 <b>▼ 가 검출된 스파이크 전부</b>입니다. <b>아래</b>: 같은 축 위의 스파이크 시각.
-     색은 <b>회색 = 기준 파일 이전, 빨강 = 기준 파일부터</b>입니다.</p></div>
+     색은 <b>회색 = 기준 파일 이전, 그 이후는 날짜별</b>입니다.</p></div>
   <div class="imgbox"><img src="data:image/png;base64,{b64(g2)}" alt="첫 스파이크에 정렬해 겹친 엔벌로프"></div>
 </figure>
 <section class="guide"><h2>지표 읽는 법</h2>
