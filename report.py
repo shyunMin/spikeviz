@@ -147,6 +147,14 @@ def mmss(t: float) -> str:
     return f"{int(t) // 60}:{int(t) % 60:02d}"
 
 
+MAX_ASPECT = 1.30      # 세로/가로 상한. 인쇄에서 모든 그림이 같은 폭으로 앉도록 맞춘다.
+
+
+def _fig_w(h: float, base: float = 13.0) -> float:
+    """그림이 너무 길쭉하면 폭을 넓혀 비율을 맞춘다."""
+    return max(base, h / MAX_ASPECT)
+
+
 def _minmax(x: np.ndarray, sr: int, cols: int = 2400):
     cols = min(cols, max(len(x) // 8, 60))
     n = len(x) // cols * cols
@@ -175,7 +183,7 @@ def graph1(results: list[dict], out: Path, baseline: str | None = None,
     for pno, (chunk, ccs, off) in enumerate(pages, 1):
         n = len(chunk)
         h = 1.1 + 2.5 * n
-        fig, axes = plt.subplots(n, 1, figsize=(13, h), facecolor=SURF, squeeze=False)
+        fig, axes = plt.subplots(n, 1, figsize=(_fig_w(h), h), facecolor=SURF, squeeze=False)
         axes = axes[:, 0]
         fig.subplots_adjust(hspace=.55, top=1 - .78 / h, bottom=.7 / h, left=.085, right=.98)
         for ax, r, c in zip(axes, chunk, ccs):
@@ -237,7 +245,7 @@ def graph2(results: list[dict], out: Path, baseline: str | None = None) -> Path:
     raw_idx = sorted({base_i, n - 1})
 
     h = 7.6 + .40 * n
-    fig = plt.figure(figsize=(13, h), facecolor=SURF)
+    fig = plt.figure(figsize=(_fig_w(h), h), facecolor=SURF)
     lab = .055 + .006 * max(len(r["name"]) for r in results)
     gs = fig.add_gridspec(3, 1, height_ratios=[2.0, 3.0, max(.8, .26 * n)], hspace=.34,
                           top=1 - 1.2 / h, bottom=.62 / h, left=min(lab, .16), right=.985)

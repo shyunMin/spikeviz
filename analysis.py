@@ -146,7 +146,7 @@ def regularity(times, span: float, n_sur: int = 300, seed: int = 0) -> dict:
     t = np.asarray(times, dtype=float)
     if len(t) < 5:
         return dict(verdict="표본 부족", n=len(t), cv=None, cv2=None,
-                    period=None, R=None, p=None, n_sur=0)
+                    period=None, R=None, r_needed=None, p=None, n_sur=0, skip_ratio=None)
     iv = np.diff(t)
     cv = float(iv.std() / iv.mean())
     cv2 = float(np.mean(2 * np.abs(np.diff(iv)) / (iv[1:] + iv[:-1]))) if len(iv) > 1 else None
