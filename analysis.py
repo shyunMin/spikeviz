@@ -52,7 +52,7 @@ def load_manual(stem: str) -> list[float] | None:
             except ValueError:
                 continue
             times.append(v)
-    return sorted(times) if times else None
+    return sorted(times)      # 파일이 있으면 0개여도 그대로 쓴다 (수동으로 세어 0인 경우)
 
 
 def probe_duration(path: str) -> float:
